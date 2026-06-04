@@ -1,0 +1,171 @@
+package views
+
+templ Login(errors map[string]string) {
+	@Base("Login") {
+		@AuthForm("/login", "Login", []Field{
+			{Name: "email", Type: "email", Label: "Email"},
+			{Name: "password", Type: "password", Label: "Password"},
+		}, errors) {
+			<p><a href="/register">Create account</a> · <a href="/forgot-password">Forgot password?</a></p>
+		}
+	}
+}
+
+templ Register(errors map[string]string) {
+	@Base("Register") {
+		@AuthForm("/register", "Create account", []Field{
+			{Name: "username", Type: "text", Label: "Username"},
+			{Name: "email", Type: "email", Label: "Email"},
+			{Name: "password", Type: "password", Label: "Password"},
+			{Name: "firstName", Type: "text", Label: "First name"},
+			{Name: "lastName", Type: "text", Label: "Last name"},
+			{Name: "yearOfBirth", Type: "number", Label: "Year of birth"},
+		}, errors) {
+			<p><a href="/login">Sign in</a></p>
+		}
+	}
+}
+
+templ ForgotPassword(errors map[string]string) {
+	@Base("Forgot password") {
+		@AuthForm("/forgot-password", "Forgot password", []Field{
+			{Name: "email", Type: "email", Label: "Email"},
+		}, errors) {
+			<p><a href="/login">Back to login</a></p>
+		}
+	}
+}
+
+templ ResetPassword(token string, errors map[string]string) {
+	@Base("Reset password") {
+		@AuthForm("/reset-password/" + token, "Reset password", []Field{
+			{Name: "password", Type: "password", Label: "New password"},
+		}, errors) {
+		}
+	}
+}
+
+templ ValidateEmail(userID string, errors map[string]string) {
+	@Base("Validate email") {
+		@AuthForm("/register/" + userID + "/validate-email", "Validate email", []Field{
+			{Name: "otp", Type: "text", Label: "Verification code"},
+		}, errors) {
+			<form data-on:submit={ sendValidationOTPSSE(userID) }>
+				<button type="submit">Send new code</button>
+			</form>
+		}
+	}
+}
+
+templ TodosPage(user User, todos []Todo) {
+	@Base("Todos") {
+		<main class="page">
+			@AppNav(user, "todos")
+			<section>
+				<h1>Todos</h1>
+				<p>A small event-sourced example feature using Orisun projections and Datastar fragments.</p>
+			</section>
+			<form class="todo-form" data-on:submit={ postFormSSE("/todos") } data-indicator="creatingTodo">
+				<input id="todo-title" name="title" maxlength="160" required placeholder="Add a todo"/>
+				<button type="submit">Add</button>
+				@SseIndicator("creatingTodo")
+			</form>
+			<section id="todo-list" data-init={ longRunningGetSSE("/todos/stream") }>
+				@TodoList(todos)
+			</section>
+		</main>
+	}
+}
+
+templ TodoList(todos []Todo) {
+	if len(todos) == 0 {
+		<div class="empty">No todos yet.</div>
+	} else {
+		<div class="todo-list">
+			for _, todo := range todos {
+				@TodoRow(todo)
+			}
+		</div>
+	}
+}
+
+templ TodoRow(todo Todo) {
+	{{ mark := "" }}
+	{{ class := "todo-row" }}
+	if todo.Completed {
+		{{ mark = "✓" }}
+		{{ class = "todo-row completed" }}
+	}
+	<article class={ class }>
+		<form data-on:submit={ todoToggleSSE(todo) }>
+			<button aria-label="toggle">{ mark }</button>
+		</form>
+		<form class="title" data-on:submit={ todoRenameSSE(todo) }>
+			<input name="title" value={ todo.Title } maxlength="160" required/>
+		</form>
+		<form data-on:submit={ todoDeleteSSE(todo) }>
+			<button class="danger">Delete</button>
+		</form>
+	</article>
+}
+
+templ Profile(user User) {
+	@Base("Profile") {
+		<main class="page">
+			@AppNav(user, "profile")
+			<section class="profile">
+				if user.Image != "" {
+					<img class="avatar" src={ user.Image } alt=""/>
+				}
+				<h1>{ displayName(user) }</h1>
+				<p>{ "@" + user.Username } · { user.Email }</p>
+				<p>{ user.Bio }</p>
+			</section>
+		</main>
+	}
+}
+
+templ ProfileEdit(user User, errors map[string]string) {
+	@Base("Edit profile") {
+		<main class="page">
+			@AppNav(user, "profile")
+			<h1>Edit profile</h1>
+			if errors != nil && errors["bio"] != "" {
+				<p class="error">{ errors["bio"] }</p>
+			}
+			<form method="post" action="/profile/bio" data-on:submit={ postFormSSE("/profile/bio") }>
+				<label>
+					Bio
+					<textarea name="bio" maxlength="280">{ user.Bio }</textarea>
+				</label>
+				<button>Save bio</button>
+			</form>
+			<form method="post" enctype="multipart/form-data" action="/profile/avatar">
+				<label>Avatar<input type="file" name="file" accept="image/*"/></label>
+				<button>Upload avatar</button>
+			</form>
+			<form method="post" enctype="multipart/form-data" action="/profile/header-image">
+				<label>Header image<input type="file" name="file" accept="image/*"/></label>
+				<button>Upload header</button>
+			</form>
+		</main>
+	}
+}
+
+templ Settings(user User) {
+	@Base("Settings") {
+		<main class="page">
+			@AppNav(user, "settings")
+			<h1>Settings</h1>
+			<form data-on:submit={ postFormSSE("/user/name") }>
+				<label>Name<input name="name" value={ user.Name } required/></label>
+				<button>Save name</button>
+			</form>
+			<form data-on:submit={ postFormSSE("/settings/change-password") }>
+				<label>Current password<input name="currentPassword" type="password" required/></label>
+				<label>New password<input name="newPassword" type="password" required/></label>
+				<button>Change password</button>
+			</form>
+		</main>
+	}
+}

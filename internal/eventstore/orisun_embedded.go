@@ -1,0 +1,255 @@
+package eventstore
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
+
+	orisunconfig "github.com/oexza/Orisun/config"
+	embeddedpg "github.com/oexza/Orisun/embedded/postgres"
+	orisunlog "github.com/oexza/Orisun/logging"
+	orisunapi "github.com/oexza/Orisun/orisun"
+)
+
+type EmbeddedOrisun struct {
+	store    *embeddedpg.Store
+	boundary string
+}
+
+type EmbeddedConfig struct {
+	Boundary         string
+	PostgresHost     string
+	PostgresPort     string
+	PostgresUser     string
+	PostgresPassword string
+	PostgresDatabase string
+	PostgresSSLMode  string
+	NATSStoreDir     string
+	NATSPort         int
+	LogLevel         string
+}
+
+func StartEmbeddedOrisun(ctx context.Context, cfg EmbeddedConfig) (*EmbeddedOrisun, error) {
+	appConfig, err := orisunconfig.LoadConfig()
+	if err != nil {
+		return nil, err
+	}
+	if cfg.Boundary == "" {
+		cfg.Boundary = "hono_event_starter"
+	}
+	if cfg.PostgresSSLMode == "" {
+		cfg.PostgresSSLMode = "disable"
+	}
+	if cfg.NATSStoreDir == "" {
+		cfg.NATSStoreDir = "/tmp/go-event-starter-orisun-nats"
+	}
+	if cfg.NATSPort == 0 {
+		cfg.NATSPort = 4225
+	}
+	if cfg.LogLevel == "" {
+		cfg.LogLevel = "info"
+	}
+
+	appConfig.Backend.Type = "postgres"
+	appConfig.Postgres.Host = cfg.PostgresHost
+	appConfig.Postgres.Port = cfg.PostgresPort
+	appConfig.Postgres.User = cfg.PostgresUser
+	appConfig.Postgres.Password = cfg.PostgresPassword
+	appConfig.Postgres.Name = cfg.PostgresDatabase
+	appConfig.Postgres.SSLMode = cfg.PostgresSSLMode
+	appConfig.Postgres.Schemas = cfg.Boundary + ":public,orisun_admin:admin"
+	appConfig.Postgres.ListenEnabled = true
+	appConfig.Boundaries = fmt.Sprintf(`[{"name":%q,"description":"Starter app events"},{"name":"orisun_admin","description":"Orisun admin boundary"}]`, cfg.Boundary)
+	if err := appConfig.ParseBoundaries(); err != nil {
+		return nil, err
+	}
+	appConfig.Admin.Boundary = "orisun_admin"
+	appConfig.Nats.StoreDir = cfg.NATSStoreDir
+	appConfig.Nats.Port = cfg.NATSPort
+	appConfig.Nats.Cluster.Enabled = false
+	appConfig.Logging.Level = cfg.LogLevel
+
+	logger := orisunlog.InitializeDefaultLogger(appConfig.Logging)
+	store, err := embeddedpg.Start(ctx, appConfig, logger)
+	if err != nil {
+		return nil, err
+	}
+	return &EmbeddedOrisun{store: store, boundary: cfg.Boundary}, nil
+}
+
+func (s *EmbeddedOrisun) Close(ctx context.Context) {
+	if s != nil && s.store != nil {
+		s.store.Close(ctx)
+	}
+}
+
+func (s *EmbeddedOrisun) SaveEvents(ctx context.Context, events []DomainEvent, expected Position, scopeEvents []ResolvedEvent, subset Query) (WriteResult, error) {
+	toSave := make([]orisunapi.EventWithMapTags, 0, len(events))
+	for _, event := range events {
+		merged, err := MergeScope(scopeEvents, event)
+		if err != nil {
+			return WriteResult{}, err
+		}
+		toSave = append(toSave, orisunapi.EventWithMapTags{
+			EventId:   merged.EventID,
+			EventType: merged.EventType,
+			Data:      flattenMap(merged.Data),
+			Metadata:  merged.Metadata,
+		})
+	}
+	position := toOrisunPosition(expected)
+	saved, err := s.store.SaveEvents(ctx, toSave, s.boundary, position, toOrisunQuery(subset))
+	if err != nil {
+		return WriteResult{}, err
+	}
+	return WriteResult{Position: fromOrisunPosition(saved)}, nil
+}
+
+func (s *EmbeddedOrisun) GetEvents(ctx context.Context, from Position, count int, direction Direction, query Query) ([]ResolvedEvent, error) {
+	if count <= 0 {
+		count = 100
+	}
+	req := &orisunapi.GetEventsRequest{
+		Boundary:     s.boundary,
+		FromPosition: toOrisunPosition(from),
+		Count:        uint32(count),
+		Direction:    orisunapi.Direction_ASC,
+		Query:        toOrisunQuery(query),
+	}
+	if direction == Backward {
+		req.Direction = orisunapi.Direction_DESC
+	}
+	resp, err := s.store.GetEvents(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	resolved := make([]ResolvedEvent, 0, len(resp.Events))
+	for _, event := range resp.Events {
+		data := map[string]any{}
+		if event.Data != "" {
+			if err := json.Unmarshal([]byte(event.Data), &data); err != nil {
+				return nil, err
+			}
+		}
+		metadata := map[string]any{}
+		if event.Metadata != "" {
+			_ = json.Unmarshal([]byte(event.Metadata), &metadata)
+		}
+		resolved = append(resolved, ResolvedEvent{
+			Position: fromOrisunPosition(event.Position),
+			Event: DomainEvent{
+				EventID:   event.EventId,
+				EventType: event.EventType,
+				Data:      unflattenMap(data),
+				Metadata:  metadata,
+			},
+		})
+	}
+	return resolved, nil
+}
+
+func (s *EmbeddedOrisun) SubscribeToEvents(ctx context.Context, subscriberName string, after Position, query Query, handle func(context.Context, ResolvedEvent) error) error {
+	handler := orisunapi.NewMessageHandler[orisunapi.Event](ctx)
+	go func() {
+		for {
+			event, err := handler.Recv()
+			if err != nil {
+				return
+			}
+			data := map[string]any{}
+			if event.Data != "" {
+				if err := json.Unmarshal([]byte(event.Data), &data); err != nil {
+					continue
+				}
+			}
+			metadata := map[string]any{}
+			if event.Metadata != "" {
+				_ = json.Unmarshal([]byte(event.Metadata), &metadata)
+			}
+			_ = handle(ctx, ResolvedEvent{
+				Position: fromOrisunPosition(event.Position),
+				Event: DomainEvent{EventID: event.EventId, EventType: event.EventType, Data: unflattenMap(data), Metadata: metadata},
+			})
+		}
+	}()
+	go func() {
+		_ = s.store.SubscribeToEvents(ctx, s.boundary, subscriberName, toOrisunPosition(after), toOrisunQuery(query), handler)
+	}()
+	return nil
+}
+
+func toOrisunPosition(position Position) *orisunapi.Position {
+	return &orisunapi.Position{CommitPosition: position.Commit, PreparePosition: position.Prepare}
+}
+
+func fromOrisunPosition(position *orisunapi.Position) Position {
+	if position == nil {
+		return NoEventPosition
+	}
+	return Position{Commit: position.CommitPosition, Prepare: position.PreparePosition}
+}
+
+func toOrisunQuery(query Query) *orisunapi.Query {
+	if len(query.Criteria) == 0 {
+		return nil
+	}
+	criteria := make([]*orisunapi.Criterion, 0, len(query.Criteria))
+	for _, criterion := range query.Criteria {
+		tags := make([]*orisunapi.Tag, 0, len(criterion.Tags))
+		for _, tag := range criterion.Tags {
+			tags = append(tags, &orisunapi.Tag{Key: tag.Key, Value: tag.Value})
+		}
+		criteria = append(criteria, &orisunapi.Criterion{Tags: tags})
+	}
+	return &orisunapi.Query{Criteria: criteria}
+}
+
+func flattenMap(input map[string]any) map[string]any {
+	output := map[string]any{}
+	var walk func(prefix string, value any)
+	walk = func(prefix string, value any) {
+		switch typed := value.(type) {
+		case map[string]any:
+			for key, child := range typed {
+				next := key
+				if prefix != "" {
+					next = prefix + "." + key
+				}
+				walk(next, child)
+			}
+		default:
+			output[prefix] = typed
+		}
+	}
+	for key, value := range input {
+		walk(key, value)
+	}
+	return output
+}
+
+func unflattenMap(input map[string]any) map[string]any {
+	output := map[string]any{}
+	for key, value := range input {
+		parts := strings.Split(key, ".")
+		current := output
+		for i, part := range parts {
+			if i == len(parts)-1 {
+				current[part] = value
+				continue
+			}
+			next, ok := current[part].(map[string]any)
+			if !ok {
+				next = map[string]any{}
+				current[part] = next
+			}
+			current = next
+		}
+	}
+	return output
+}
+
+func PollingStoreDir() string {
+	return fmt.Sprintf("/tmp/go-event-starter-orisun-%d", time.Now().UnixNano())
+}

@@ -1,0 +1,63 @@
+version: "3"
+
+tasks:
+  dev:
+    deps: [templ, css]
+    cmds:
+      - task --parallel templ-watch server-watch css-watch
+
+  server-watch:
+    deps: [templ, css]
+    cmds:
+      - go tool air -c .air.toml
+
+  build:
+    deps: [templ, css]
+    cmds:
+      - go build ./cmd/server
+
+  test:
+    deps: [templ]
+    cmds:
+      - go test ./...
+
+  vet:
+    deps: [templ]
+    cmds:
+      - go vet ./...
+
+  migrate:
+    cmds:
+      - go run ./cmd/server -migrate-only
+
+  seed:
+    cmds:
+      - go run ./cmd/server -seed-only
+
+  templ:
+    sources:
+      - "**/*.templ"
+    generates:
+      - "**/*_templ.go"
+    cmds:
+      - go tool templ generate
+
+  templ-watch:
+    cmds:
+      - go tool templ generate -watch
+
+  css:
+    sources:
+      - src/input.css
+      - src/daisyui/daisyui.js
+      - src/daisyui/daisyui-theme.js
+      - internal/**/*.templ
+      - internal/**/*.go
+    generates:
+      - static/style.css
+    cmds:
+      - go tool gotailwind -i src/input.css -o static/style.css
+
+  css-watch:
+    cmds:
+      - go tool gotailwind -i src/input.css -o static/style.css -w

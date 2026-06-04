@@ -1,0 +1,65 @@
+package views
+
+import (
+	"fmt"
+	"github.com/example/hono-event-starter-go/internal/resources"
+)
+
+templ Base(title string) {
+	<!doctype html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ title }</title>
+			<script type="module" src={ resources.StaticPath("datastar.js") }></script>
+			<link rel="stylesheet" href={ resources.StaticPath("style.css") }/>
+		</head>
+		<body>
+			if isDevelopment() {
+				<div data-init={ hotReloadSSE() }></div>
+			}
+			{ children... }
+		</body>
+	</html>
+}
+
+templ AppNav(user User, active string) {
+	<nav>
+		<a href="/todos">Go Event Starter</a>
+		<span>
+			<a class={ templ.KV("active", active == "todos") } href="/todos">Todos</a>
+			<a class={ templ.KV("active", active == "profile") } href="/profile">{ displayName(user) }</a>
+			<a class={ templ.KV("active", active == "settings") } href="/profile/settings">Settings</a>
+			<form method="post" action="/logout">
+				<button>Logout</button>
+			</form>
+		</span>
+	</nav>
+}
+
+templ AuthForm(action string, title string, fields []Field, errors map[string]string) {
+	<main class="page narrow">
+		<h1>{ title }</h1>
+		if errors != nil && errors["error"] != "" {
+			<p class="error">{ errors["error"] }</p>
+		}
+		<form method="post" action={ action } data-on:submit={ postFormSSE(action) }>
+			for _, field := range fields {
+				<label>
+					{ field.Label }
+					<input name={ field.Name } type={ field.Type } required/>
+				</label>
+				if errors != nil && errors[field.Name] != "" {
+					<small class="error">{ errors[field.Name] }</small>
+				}
+			}
+			<button type="submit">{ title }</button>
+		</form>
+		{ children... }
+	</main>
+}
+
+templ SseIndicator(signalName string) {
+	<span class="loading loading-spinner loading-sm" data-class={ fmt.Sprintf("{'opacity-100': $%s, 'opacity-0': !$%s}", signalName, signalName) }></span>
+}

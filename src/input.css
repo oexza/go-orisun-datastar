@@ -1,0 +1,239 @@
+@import "tailwindcss";
+
+@plugin "./daisyui/daisyui.js" {
+    themes: false;
+}
+
+@plugin "./daisyui/daisyui-theme.js" {
+    name: "dark";
+    default: false;
+    prefersdark: true;
+    color-scheme: "dark";
+    --color-base-100: #1B1B1B;
+    --color-base-200: oklch(23.26% 0.014 253.1);
+    --color-base-300: oklch(21.15% 0.012 254.09);
+    --color-base-content: oklch(97.807% 0.029 256.847);
+    --color-primary: #FFFFFF;
+    --color-primary-content: oklch(12% 0.042 264.695);
+    --color-secondary: #E76554;
+    --color-secondary-content: oklch(94% 0.028 342.258);
+    --color-accent: oklch(77% 0.152 181.912);
+    --color-accent-content: oklch(38% 0.063 188.416);
+    --color-neutral: oklch(14% 0.005 285.823);
+    --color-neutral-content: oklch(92% 0.004 286.32);
+    --color-info: oklch(74% 0.16 232.661);
+    --color-info-content: oklch(29% 0.066 243.157);
+    --color-success: oklch(76% 0.177 163.223);
+    --color-success-content: oklch(37% 0.077 168.94);
+    --color-warning: oklch(82% 0.189 84.429);
+    --color-warning-content: oklch(41% 0.112 45.904);
+    --color-error: oklch(71% 0.194 13.428);
+    --color-error-content: oklch(27% 0.105 12.094);
+    --radius-selector: 2rem;
+    --radius-field: 2rem;
+    --radius-box: 2rem;
+    --size-selector: 0.25rem;
+    --size-field: 0.25rem;
+    --border: 1px;
+    --depth: 0;
+    --noise: 0;
+}
+
+@plugin "./daisyui/daisyui-theme.js" {
+    name: "light";
+    default: true;
+    prefersdark: false;
+    color-scheme: "light";
+    --color-base-100: oklch(100% 0 0);
+    --color-base-200: oklch(98% 0 0);
+    --color-base-300: oklch(95% 0 0);
+    --color-base-content: oklch(26% 0.007 34.298);
+    --color-primary: oklch(12% 0.042 264.695);
+    --color-primary-content: oklch(93% 0.034 272.788);
+    --color-secondary: #E76554;
+    --color-secondary-content: oklch(94% 0.028 342.258);
+    --color-accent: oklch(77% 0.152 181.912);
+    --color-accent-content: oklch(38% 0.063 188.416);
+    --color-neutral: oklch(14% 0.005 285.823);
+    --color-neutral-content: oklch(92% 0.004 286.32);
+    --color-info: oklch(74% 0.16 232.661);
+    --color-info-content: oklch(29% 0.066 243.157);
+    --color-success: oklch(76% 0.177 163.223);
+    --color-success-content: oklch(37% 0.077 168.94);
+    --color-warning: oklch(82% 0.189 84.429);
+    --color-warning-content: oklch(41% 0.112 45.904);
+    --color-error: oklch(71% 0.194 13.428);
+    --color-error-content: oklch(27% 0.105 12.094);
+    --radius-selector: 2rem;
+    --radius-field: 2rem;
+    --radius-box: 2rem;
+    --size-selector: 0.25rem;
+    --size-field: 0.25rem;
+    --border: 1px;
+    --depth: 0;
+    --noise: 0;
+}
+
+html {
+    touch-action: manipulation;
+    min-width: 320px;
+    text-size-adjust: 100%;
+    -webkit-text-size-adjust: 100%;
+}
+
+body {
+    min-height: 100svh;
+    overflow-x: hidden;
+}
+
+* {
+    -webkit-tap-highlight-color: transparent;
+}
+
+a, button, label, [role="button"], [role="tab"], [role="menuitem"] {
+    cursor: pointer;
+}
+
+img, picture, video, canvas {
+    display: block;
+}
+
+img {
+    contain: paint;
+    max-width: 100%;
+}
+
+body {
+    margin: 0;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #f5f7f9;
+    color: #17202a;
+}
+
+a {
+    color: #155eef;
+    text-decoration: none;
+}
+
+.page {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 32px 20px;
+}
+
+.narrow {
+    max-width: 420px;
+}
+
+nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 28px;
+}
+
+nav span {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+form {
+    display: grid;
+    gap: 12px;
+}
+
+label {
+    display: grid;
+    gap: 6px;
+    font-weight: 600;
+}
+
+input, textarea {
+    box-sizing: border-box;
+    width: 100%;
+    border: 1px solid #cfd8e3;
+    border-radius: 6px;
+    padding: 10px 12px;
+    font: inherit;
+    background: white;
+}
+
+textarea {
+    min-height: 110px;
+}
+
+button {
+    border: 0;
+    border-radius: 6px;
+    padding: 10px 14px;
+    background: #17202a;
+    color: white;
+    font: inherit;
+    cursor: pointer;
+}
+
+.danger {
+    background: transparent;
+    color: #b42318;
+}
+
+.error {
+    color: #b42318;
+}
+
+.todo-form {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    margin: 18px 0;
+}
+
+.todo-list {
+    display: grid;
+    gap: 8px;
+}
+
+.todo-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 10px;
+    align-items: center;
+    background: white;
+    border: 1px solid #dbe3ef;
+    border-radius: 8px;
+    padding: 10px;
+}
+
+.todo-row.completed input {
+    color: #6b7280;
+    text-decoration: line-through;
+}
+
+.todo-row .title {
+    display: block;
+}
+
+.empty {
+    text-align: center;
+    border: 1px dashed #cfd8e3;
+    border-radius: 8px;
+    padding: 40px;
+    background: white;
+    color: #667085;
+}
+
+.profile {
+    background: white;
+    border: 1px solid #dbe3ef;
+    border-radius: 8px;
+    padding: 20px;
+}
+
+.avatar {
+    width: 96px;
+    height: 96px;
+    border-radius: 999px;
+    object-fit: cover;
+}
