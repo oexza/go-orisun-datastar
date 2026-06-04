@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
-	"fmt"
 	"math/big"
 	"net/http"
 	"strings"
@@ -16,18 +15,18 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/example/hono-event-starter-go/internal/email"
 	"github.com/example/hono-event-starter-go/internal/eventstore"
 	"github.com/example/hono-event-starter-go/internal/views"
 )
 
 const (
-	UserRegistered                 = "UserRegistered"
-	UserNameChanged                = "UserNameChanged"
+	UserRegistered                = "UserRegistered"
+	UserNameChanged               = "UserNameChanged"
 	EmailVerificationOTPGenerated = "EmailVerificationOTPGenerated"
 	EmailVerificationOTPValidated = "EmailVerificationOTPValidated"
 	EmailVerificationOTPSent      = "EmailVerificationOTPSent"
 	PasswordResetRequested        = "PasswordResetRequested"
+	PasswordResetEmailSent        = "PasswordResetEmailSent"
 	PasswordResetCompleted        = "PasswordResetCompleted"
 	PasswordChanged               = "PasswordChanged"
 )
@@ -36,19 +35,15 @@ type Service struct {
 	db            *pgxpool.Pool
 	store         eventstore.Saver
 	retriever     eventstore.Retriever
-	email         email.Sender
-	appURL        string
 	secureCookie  bool
 	sessionCookie string
 }
 
-func NewService(db *pgxpool.Pool, saver eventstore.Saver, retriever eventstore.Retriever, sender email.Sender, appURL string, secureCookie bool) *Service {
+func NewService(db *pgxpool.Pool, saver eventstore.Saver, retriever eventstore.Retriever, secureCookie bool) *Service {
 	return &Service{
 		db:            db,
 		store:         saver,
 		retriever:     retriever,
-		email:         sender,
-		appURL:        appURL,
 		secureCookie:  secureCookie,
 		sessionCookie: "go-event-starter-session",
 	}
@@ -123,7 +118,7 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (views.User
 	}
 
 	user := views.User{ID: userID, UserRegisteredID: userRegisteredID, Name: name, Username: input.Username, Email: input.Email}
-	if err := s.GenerateAndSendOTP(ctx, user); err != nil {
+	if err := s.GenerateEmailVerificationOTP(ctx, user); err != nil {
 		return views.User{}, err
 	}
 	return user, nil
@@ -196,14 +191,14 @@ func (s *Service) UserByIDOrRegisteredID(ctx context.Context, id string) (views.
 	`, id))
 }
 
-func (s *Service) GenerateAndSendOTP(ctx context.Context, user views.User) error {
+func (s *Service) GenerateEmailVerificationOTP(ctx context.Context, user views.User) error {
 	code, err := numericCode(6)
 	if err != nil {
 		return err
 	}
 	otpID := uuid.NewString()
 	expiresAt := time.Now().Add(15 * time.Minute)
-	query := eventstore.Query{Criteria: []eventstore.Criterion{{Tags: []eventstore.Tag{{Key: "eventType", Value: EmailVerificationOTPGenerated}, {Key: "scope.userRegisteredId", Value: user.UserRegisteredID}}}}}
+	query := emailVerificationOTPGeneratedQuery(otpID)
 	event := eventstore.DomainEvent{
 		EventID:   otpID,
 		EventType: EmailVerificationOTPGenerated,
@@ -214,9 +209,6 @@ func (s *Service) GenerateAndSendOTP(ctx context.Context, user views.User) error
 			"scope":                           map[string]any{"userRegisteredId": user.UserRegisteredID},
 		},
 	}
-	if _, err := s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, query); err != nil {
-		return err
-	}
 	_, err = s.db.Exec(ctx, `
 		INSERT INTO auth_verification (id, identifier, value, expires_at)
 		VALUES ($1, $2, $3, $4)
@@ -224,16 +216,10 @@ func (s *Service) GenerateAndSendOTP(ctx context.Context, user views.User) error
 	if err != nil {
 		return err
 	}
-	if err := s.email.Send(ctx, email.Message{To: user.Email, Title: "Verify your email", Body: "Your verification code is <strong>" + code + "</strong>."}); err != nil {
+	if _, err := s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, query); err != nil {
 		return err
 	}
-	sent := eventstore.DomainEvent{
-		EventID:   uuid.NewString(),
-		EventType: EmailVerificationOTPSent,
-		Data:      map[string]any{"emailVerificationOTPSentId": uuid.NewString(), "sentAt": time.Now().Format(time.RFC3339), "scope": map[string]any{"emailVerificationOTPGeneratedId": otpID}},
-	}
-	_, err = s.store.SaveEvents(ctx, []eventstore.DomainEvent{sent}, eventstore.NoEventPosition, nil, eventstore.Query{Criteria: []eventstore.Criterion{{Tags: []eventstore.Tag{{Key: "eventType", Value: EmailVerificationOTPSent}}}}})
-	return err
+	return nil
 }
 
 func (s *Service) ValidateOTP(ctx context.Context, userID, code string) error {
@@ -253,16 +239,21 @@ func (s *Service) ValidateOTP(ctx context.Context, userID, code string) error {
 	if err != nil {
 		return errors.New("invalid or expired verification code")
 	}
+	validationID := uuid.NewString()
 	event := eventstore.DomainEvent{
-		EventID:   uuid.NewString(),
+		EventID:   validationID,
 		EventType: EmailVerificationOTPValidated,
 		Data: map[string]any{
-			"emailVerificationOTPValidatedId": uuid.NewString(),
+			"emailVerificationOTPValidatedId": validationID,
 			"validatedAt":                     time.Now().Format(time.RFC3339),
 			"scope":                           map[string]any{"emailVerificationOTPGeneratedId": verificationID, "userRegisteredId": user.UserRegisteredID},
 		},
 	}
-	if _, err := s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, eventstore.Query{}); err != nil {
+	query := eventstore.Query{Criteria: []eventstore.Criterion{{Tags: []eventstore.Tag{
+		{Key: "eventType", Value: EmailVerificationOTPValidated},
+		{Key: "emailVerificationOTPValidatedId", Value: validationID},
+	}}}}
+	if _, err := s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, query); err != nil {
 		return err
 	}
 	_, err = s.db.Exec(ctx, `UPDATE auth_user SET email_verified = true, updated_at = now() WHERE id = $1`, user.ID)
@@ -291,9 +282,6 @@ func (s *Service) RequestPasswordReset(ctx context.Context, emailAddress string)
 			"scope":                    map[string]any{"userRegisteredId": user.UserRegisteredID},
 		},
 	}
-	if _, err := s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, eventstore.Query{}); err != nil {
-		return err
-	}
 	_, err = s.db.Exec(ctx, `
 		INSERT INTO auth_verification (id, identifier, value, expires_at)
 		VALUES ($1, $2, $3, $4)
@@ -301,7 +289,10 @@ func (s *Service) RequestPasswordReset(ctx context.Context, emailAddress string)
 	if err != nil {
 		return err
 	}
-	return s.email.Send(ctx, email.Message{To: user.Email, Title: "Reset your password", Body: fmt.Sprintf(`<a href="%s/reset-password/%s">Reset your password</a>`, s.appURL, token)})
+	if _, err := s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, passwordResetRequestedQuery(requestID)); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *Service) ResetPassword(ctx context.Context, token, password string) error {

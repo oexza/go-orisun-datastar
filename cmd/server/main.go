@@ -90,14 +90,37 @@ func main() {
 		storageProvider = provider
 	}
 
-	authService := auth.NewService(db, orisunStore, orisunStore, email.BrevoSender{
+	emailSender := email.BrevoSender{
 		APIKey: cfg.BrevoAPIKey, SenderEmail: cfg.BrevoSenderEmail, SenderName: cfg.BrevoSenderName,
-	}, cfg.AppURL, !cfg.DevelopmentCookie)
+	}
+	authService := auth.NewService(db, orisunStore, orisunStore, !cfg.DevelopmentCookie)
 	todoReadModel := todo.NewReadModel(db)
 	todoService := todo.NewService(todoReadModel, orisunStore, orisunStore, bus)
 	profileService := profile.NewService(db, orisunStore, storageProvider)
 
 	checkpointer := eventstore.NewPostgresCheckpointer(db)
+	emailValidationOTPEventHandler, err := auth.NewEmailValidationOTPToBeSentEventHandler(orisunStore, checkpointer, orisunStore, orisunStore, emailSender, logger)
+	if err != nil {
+		logger.Error("create email validation OTP event handler", "err", err)
+		os.Exit(1)
+	}
+	if err := emailValidationOTPEventHandler.StartSubscribing(ctx); err != nil {
+		logger.Error("start email validation OTP event handler", "err", err)
+		os.Exit(1)
+	}
+	defer emailValidationOTPEventHandler.StopSubscribing()
+
+	passwordResetEmailEventHandler, err := auth.NewPasswordResetEmailToBeSentEventHandler(orisunStore, checkpointer, orisunStore, orisunStore, emailSender, cfg.AppURL, logger)
+	if err != nil {
+		logger.Error("create password reset email event handler", "err", err)
+		os.Exit(1)
+	}
+	if err := passwordResetEmailEventHandler.StartSubscribing(ctx); err != nil {
+		logger.Error("start password reset email event handler", "err", err)
+		os.Exit(1)
+	}
+	defer passwordResetEmailEventHandler.StopSubscribing()
+
 	todoReadModelEventHandler, err := todo.NewTodoReadModelEventHandler(orisunStore, checkpointer, todoReadModel, bus, logger)
 	if err != nil {
 		logger.Error("create todo read model event handler", "err", err)
