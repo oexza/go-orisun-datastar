@@ -203,6 +203,13 @@ func emailVerificationOTPSentQuery(otpID string) eventstore.Query {
 	}}}}
 }
 
+func emailVerificationOTPValidatedQuery(otpID string) eventstore.Query {
+	return eventstore.Query{Criteria: []eventstore.Criterion{{Tags: []eventstore.Tag{
+		{Key: "eventType", Value: EmailVerificationOTPValidated},
+		{Key: "scope.emailVerificationOTPGeneratedId", Value: otpID},
+	}}}}
+}
+
 func passwordResetRequestedQuery(requestID string) eventstore.Query {
 	return eventstore.Query{Criteria: []eventstore.Criterion{{Tags: []eventstore.Tag{
 		{Key: "eventType", Value: PasswordResetRequested},
