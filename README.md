@@ -2,6 +2,13 @@
 
 A Go/chi/templ version of the Bun/Hono event-sourced starter. It keeps the same architectural boundaries: immutable Orisun events are the source of truth, PostgreSQL stores read models and auth/session tables, projections are checkpointed, and Datastar SSE patches server-rendered fragments.
 
+## Variants
+
+This repository keeps database-backed variants on separate branches:
+
+- `postgres`: PostgreSQL for app tables plus embedded Orisun Postgres. Use this branch when matching the original Hono starter's Postgres deployment shape.
+- `sqlite`: embedded SQLite for app tables plus embedded Orisun SQLite. Use this branch for a local-first variant that does not require a Postgres service.
+
 ## Commands
 
 ```bash
