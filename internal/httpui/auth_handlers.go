@@ -105,7 +105,7 @@ func (s Server) sendOTP(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "userID")
 	user, err := s.Auth.UserByIDOrRegisteredID(r.Context(), userID)
 	if err == nil {
-		_ = s.Auth.GenerateAndSendOTP(r.Context(), user)
+		_ = s.Auth.GenerateEmailVerificationOTP(r.Context(), user)
 	}
 	writeSSE(w, r, func(sse *datastar.ServerSentEventGenerator) error {
 		return sse.Redirect("/register/" + userID + "/validate-email")
