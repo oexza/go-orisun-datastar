@@ -118,9 +118,6 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (views.User
 	}
 
 	user := views.User{ID: userID, UserRegisteredID: userRegisteredID, Name: name, Username: input.Username, Email: input.Email}
-	if err := s.GenerateEmailVerificationOTP(ctx, user); err != nil {
-		return views.User{}, err
-	}
 	return user, nil
 }
 
@@ -192,6 +189,25 @@ func (s *Service) UserByIDOrRegisteredID(ctx context.Context, id string) (views.
 }
 
 func (s *Service) GenerateEmailVerificationOTP(ctx context.Context, user views.User) error {
+	return s.generateEmailVerificationOTP(ctx, user, nil)
+}
+
+func (s *Service) GenerateEmailVerificationOTPWithMetadata(ctx context.Context, user views.User, metadata CommandMetadata) error {
+	return s.generateEmailVerificationOTP(ctx, user, metadata)
+}
+
+func (s *Service) generateEmailVerificationOTP(ctx context.Context, user views.User, metadata CommandMetadata) error {
+	model, err := s.emailVerificationOTPContext(ctx, user.UserRegisteredID)
+	if err != nil {
+		return err
+	}
+	if model.emailValidated {
+		return nil
+	}
+	if model.latestOTPExpiresAt.After(time.Now()) {
+		return nil
+	}
+
 	code, err := numericCode(6)
 	if err != nil {
 		return err
@@ -208,6 +224,7 @@ func (s *Service) GenerateEmailVerificationOTP(ctx context.Context, user views.U
 			"expiresAt":                       expiresAt.Format(time.RFC3339),
 			"scope":                           map[string]any{"userRegisteredId": user.UserRegisteredID},
 		},
+		Metadata: metadataWithQuery(metadata, query),
 	}
 	_, err = s.db.Exec(ctx, `
 		INSERT INTO auth_verification (id, identifier, value, expires_at)
@@ -222,23 +239,47 @@ func (s *Service) GenerateEmailVerificationOTP(ctx context.Context, user views.U
 	return nil
 }
 
+func (s *Service) UpdateImage(ctx context.Context, userRegisteredID, imageURL string) error {
+	_, err := s.db.Exec(ctx, `UPDATE auth_user SET image = $1, updated_at = now() WHERE user_registered_id = $2`, imageURL, userRegisteredID)
+	return err
+}
+
+func (s *Service) MarkEmailVerified(ctx context.Context, userRegisteredID string) error {
+	_, err := s.db.Exec(ctx, `UPDATE auth_user SET email_verified = true, updated_at = now() WHERE user_registered_id = $1`, userRegisteredID)
+	return err
+}
+
 func (s *Service) ValidateOTP(ctx context.Context, userID, code string) error {
-	user, err := scanUser(s.db.QueryRow(ctx, `
-		SELECT id, user_registered_id, name, coalesce(username, ''), email, email_verified, coalesce(image, ''), '', ''
-		FROM auth_user WHERE id = $1 OR user_registered_id = $1
-	`, userID))
+	user, err := s.UserByIDOrRegisteredID(ctx, userID)
 	if err != nil {
 		return err
 	}
-	var verificationID string
-	err = s.db.QueryRow(ctx, `
-		SELECT id FROM auth_verification
-		WHERE identifier = $1 AND value = $2 AND expires_at > now()
-		ORDER BY created_at DESC LIMIT 1
-	`, "email:"+user.UserRegisteredID, strings.TrimSpace(code)).Scan(&verificationID)
+
+	generatedQuery := eventstore.Query{Criteria: []eventstore.Criterion{{Tags: []eventstore.Tag{
+		{Key: "eventType", Value: EmailVerificationOTPGenerated},
+		{Key: "scope.userRegisteredId", Value: user.UserRegisteredID},
+	}}}}
+	generatedEvents, err := s.retriever.GetEvents(ctx, eventstore.NoEventPosition, 100, eventstore.Forward, generatedQuery)
 	if err != nil {
+		return err
+	}
+	otp := latestEmailVerificationOTP(generatedEvents)
+	if otp.id == "" {
+		return errors.New("no verification code found")
+	}
+	if otp.code != strings.TrimSpace(code) || !otp.expiresAt.After(time.Now()) {
 		return errors.New("invalid or expired verification code")
 	}
+
+	validationQuery := emailVerificationOTPValidatedQuery(otp.id)
+	validationEvents, err := s.retriever.GetEvents(ctx, eventstore.NoEventPosition, 1, eventstore.Forward, validationQuery)
+	if err != nil {
+		return err
+	}
+	if len(validationEvents) > 0 {
+		return errors.New("verification code already validated")
+	}
+
 	validationID := uuid.NewString()
 	event := eventstore.DomainEvent{
 		EventID:   validationID,
@@ -246,17 +287,18 @@ func (s *Service) ValidateOTP(ctx context.Context, userID, code string) error {
 		Data: map[string]any{
 			"emailVerificationOTPValidatedId": validationID,
 			"validatedAt":                     time.Now().Format(time.RFC3339),
-			"scope":                           map[string]any{"emailVerificationOTPGeneratedId": verificationID, "userRegisteredId": user.UserRegisteredID},
+			"scope":                           map[string]any{"emailVerificationOTPGeneratedId": otp.id, "userRegisteredId": user.UserRegisteredID},
 		},
+		Metadata: metadataWithQuery(nil, combineQueries(generatedQuery, validationQuery)),
 	}
-	query := eventstore.Query{Criteria: []eventstore.Criterion{{Tags: []eventstore.Tag{
-		{Key: "eventType", Value: EmailVerificationOTPValidated},
-		{Key: "emailVerificationOTPValidatedId", Value: validationID},
-	}}}}
-	if _, err := s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, query); err != nil {
-		return err
+	modelPosition := eventstore.NoEventPosition
+	handledEvents := append(generatedEvents, validationEvents...)
+	for _, resolved := range handledEvents {
+		if resolved.Position.After(modelPosition) {
+			modelPosition = resolved.Position
+		}
 	}
-	_, err = s.db.Exec(ctx, `UPDATE auth_user SET email_verified = true, updated_at = now() WHERE id = $1`, user.ID)
+	_, err = s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, modelPosition, handledEvents, combineQueries(generatedQuery, validationQuery))
 	return err
 }
 
@@ -315,6 +357,62 @@ func (s *Service) ResetPassword(ctx context.Context, token, password string) err
 	event := eventstore.DomainEvent{EventID: uuid.NewString(), EventType: PasswordResetCompleted, Data: map[string]any{"passwordResetCompletedId": uuid.NewString(), "completedAt": time.Now().Format(time.RFC3339), "scope": map[string]any{"passwordResetRequestedId": requestID}}}
 	_, err = s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, eventstore.Query{})
 	return err
+}
+
+type emailVerificationOTPModel struct {
+	emailValidated     bool
+	latestOTPExpiresAt time.Time
+}
+
+type latestOTP struct {
+	id        string
+	code      string
+	expiresAt time.Time
+	position  eventstore.Position
+}
+
+func latestEmailVerificationOTP(events []eventstore.ResolvedEvent) latestOTP {
+	otp := latestOTP{position: eventstore.NoEventPosition}
+	for _, resolved := range events {
+		if !resolved.Position.After(otp.position) {
+			continue
+		}
+		expiresAt, _ := resolved.Event.Data["expiresAt"].(string)
+		parsed, err := time.Parse(time.RFC3339, expiresAt)
+		if err != nil {
+			continue
+		}
+		otp.id, _ = resolved.Event.Data["emailVerificationOTPGeneratedId"].(string)
+		otp.code, _ = resolved.Event.Data["otpCode"].(string)
+		otp.expiresAt = parsed
+		otp.position = resolved.Position
+	}
+	return otp
+}
+
+func (s *Service) emailVerificationOTPContext(ctx context.Context, userRegisteredID string) (emailVerificationOTPModel, error) {
+	query := eventstore.Query{Criteria: []eventstore.Criterion{
+		{Tags: []eventstore.Tag{{Key: "eventType", Value: EmailVerificationOTPGenerated}, {Key: "scope.userRegisteredId", Value: userRegisteredID}}},
+		{Tags: []eventstore.Tag{{Key: "eventType", Value: EmailVerificationOTPValidated}, {Key: "scope.userRegisteredId", Value: userRegisteredID}}},
+	}}
+	events, err := s.retriever.GetEvents(ctx, eventstore.NoEventPosition, 20, eventstore.Forward, query)
+	if err != nil {
+		return emailVerificationOTPModel{}, err
+	}
+	model := emailVerificationOTPModel{}
+	for _, resolved := range events {
+		switch resolved.Event.EventType {
+		case EmailVerificationOTPGenerated:
+			expiresAt, _ := resolved.Event.Data["expiresAt"].(string)
+			parsed, err := time.Parse(time.RFC3339, expiresAt)
+			if err == nil && parsed.After(model.latestOTPExpiresAt) {
+				model.latestOTPExpiresAt = parsed
+			}
+		case EmailVerificationOTPValidated:
+			model.emailValidated = true
+		}
+	}
+	return model, nil
 }
 
 func (s *Service) ChangePassword(ctx context.Context, user views.User, currentPassword, newPassword string) error {

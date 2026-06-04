@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/example/hono-event-starter-go/internal/eventstore"
 	"github.com/example/hono-event-starter-go/internal/storage"
@@ -17,19 +16,18 @@ import (
 )
 
 const (
-	ProfileBioUpdated           = "ProfileBioUpdated"
-	ProfileImageUploaded        = "ProfileImageUploaded"
-	ProfileHeaderImageUploaded  = "ProfileHeaderImageUploaded"
+	ProfileBioUpdated          = "ProfileBioUpdated"
+	ProfileImageUploaded       = "ProfileImageUploaded"
+	ProfileHeaderImageUploaded = "ProfileHeaderImageUploaded"
 )
 
 type Service struct {
-	db      *pgxpool.Pool
 	store   eventstore.Saver
 	storage storage.Provider
 }
 
-func NewService(db *pgxpool.Pool, store eventstore.Saver, storage storage.Provider) *Service {
-	return &Service{db: db, store: store, storage: storage}
+func NewService(store eventstore.Saver, storage storage.Provider) *Service {
+	return &Service{store: store, storage: storage}
 }
 
 func (s *Service) UpdateBio(ctx context.Context, user views.User, bio string) error {
@@ -37,24 +35,18 @@ func (s *Service) UpdateBio(ctx context.Context, user views.User, bio string) er
 	if len(bio) > 280 {
 		return errors.New("bio must be 280 characters or fewer")
 	}
+	eventID := uuid.NewString()
 	event := eventstore.DomainEvent{
-		EventID:   uuid.NewString(),
+		EventID:   eventID,
 		EventType: ProfileBioUpdated,
 		Data: map[string]any{
-			"profileBioUpdatedId": uuid.NewString(),
+			"profileBioUpdatedId": eventID,
 			"bio":                 bio,
 			"updatedAt":           time.Now().Format(time.RFC3339),
 			"scope":               map[string]any{"userRegisteredId": user.UserRegisteredID},
 		},
 	}
-	if _, err := s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, eventstore.Query{}); err != nil {
-		return err
-	}
-	_, err := s.db.Exec(ctx, `
-		INSERT INTO profile_stats (user_id, name, username, email, bio, last_event_commit_position, last_event_prepare_position)
-		VALUES ($1, $2, $3, $4, $5, 0, 0)
-		ON CONFLICT (user_id) DO UPDATE SET bio = EXCLUDED.bio, updated_at = now()
-	`, user.UserRegisteredID, user.Name, user.Username, user.Email, bio)
+	_, err := s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, profileEventQuery(ProfileBioUpdated, "profileBioUpdatedId", eventID))
 	return err
 }
 
@@ -77,38 +69,25 @@ func (s *Service) UploadImage(ctx context.Context, user views.User, data []byte,
 		return "", err
 	}
 	url := s.storage.PublicURL(key)
+	eventID := uuid.NewString()
+	idField := "profileImageUploadedId"
+	if header {
+		idField = "profileHeaderImageUploadedId"
+	}
 	event := eventstore.DomainEvent{
-		EventID:   uuid.NewString(),
+		EventID:   eventID,
 		EventType: eventType,
 		Data: map[string]any{
+			idField:      eventID,
 			"imageUrl":   url,
 			"uploadedAt": time.Now().Format(time.RFC3339),
 			"scope":      map[string]any{"userRegisteredId": user.UserRegisteredID},
 		},
 	}
-	if _, err := s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, eventstore.Query{}); err != nil {
+	if _, err := s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, profileEventQuery(eventType, idField, eventID)); err != nil {
 		return "", err
 	}
-	column := "image"
-	if header {
-		column = "header_image_url"
-		_, err := s.db.Exec(ctx, `
-			INSERT INTO profile_stats (user_id, name, username, email, header_image_url, last_event_commit_position, last_event_prepare_position)
-			VALUES ($1, $2, $3, $4, $5, 0, 0)
-			ON CONFLICT (user_id) DO UPDATE SET header_image_url = EXCLUDED.header_image_url, updated_at = now()
-		`, user.UserRegisteredID, user.Name, user.Username, user.Email, url)
-		return url, err
-	}
-	_, err := s.db.Exec(ctx, `UPDATE auth_user SET image = $1, updated_at = now() WHERE id = $2`, url, user.ID)
-	if err != nil {
-		return "", err
-	}
-	_, err = s.db.Exec(ctx, fmt.Sprintf(`
-		INSERT INTO profile_stats (user_id, name, username, email, %s, last_event_commit_position, last_event_prepare_position)
-		VALUES ($1, $2, $3, $4, $5, 0, 0)
-		ON CONFLICT (user_id) DO UPDATE SET %s = EXCLUDED.%s, updated_at = now()
-	`, column, column, column), user.UserRegisteredID, user.Name, user.Username, user.Email, url)
-	return url, err
+	return url, nil
 }
 
 func extension(contentType string) string {
@@ -122,4 +101,11 @@ func extension(contentType string) string {
 	default:
 		return "png"
 	}
+}
+
+func profileEventQuery(eventType, idField, id string) eventstore.Query {
+	return eventstore.Query{Criteria: []eventstore.Criterion{{Tags: []eventstore.Tag{
+		{Key: "eventType", Value: eventType},
+		{Key: idField, Value: id},
+	}}}}
 }

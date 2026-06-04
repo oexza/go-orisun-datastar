@@ -96,9 +96,21 @@ func main() {
 	authService := auth.NewService(db, orisunStore, orisunStore, !cfg.DevelopmentCookie)
 	todoReadModel := todo.NewReadModel(db)
 	todoService := todo.NewService(todoReadModel, orisunStore, orisunStore, bus)
-	profileService := profile.NewService(db, orisunStore, storageProvider)
+	profileReadModel := profile.NewReadModel(db)
+	profileService := profile.NewService(orisunStore, storageProvider)
 
 	checkpointer := eventstore.NewPostgresCheckpointer(db)
+	registrationOTPEventHandler, err := auth.NewRegistrationOTPToBeGeneratedEventHandler(orisunStore, checkpointer, authService, logger)
+	if err != nil {
+		logger.Error("create registration OTP event handler", "err", err)
+		os.Exit(1)
+	}
+	if err := registrationOTPEventHandler.StartSubscribing(ctx); err != nil {
+		logger.Error("start registration OTP event handler", "err", err)
+		os.Exit(1)
+	}
+	defer registrationOTPEventHandler.StopSubscribing()
+
 	emailValidationOTPEventHandler, err := auth.NewEmailValidationOTPToBeSentEventHandler(orisunStore, checkpointer, orisunStore, orisunStore, emailSender, logger)
 	if err != nil {
 		logger.Error("create email validation OTP event handler", "err", err)
@@ -120,6 +132,39 @@ func main() {
 		os.Exit(1)
 	}
 	defer passwordResetEmailEventHandler.StopSubscribing()
+
+	authUserProjectionEventHandler, err := auth.NewAuthUserProjectionEventHandler(orisunStore, checkpointer, orisunStore, authService, logger)
+	if err != nil {
+		logger.Error("create auth user projection event handler", "err", err)
+		os.Exit(1)
+	}
+	if err := authUserProjectionEventHandler.StartSubscribing(ctx); err != nil {
+		logger.Error("start auth user projection event handler", "err", err)
+		os.Exit(1)
+	}
+	defer authUserProjectionEventHandler.StopSubscribing()
+
+	profileReadModelEventHandler, err := profile.NewReadModelEventHandler(orisunStore, checkpointer, profileReadModel, logger)
+	if err != nil {
+		logger.Error("create profile read model event handler", "err", err)
+		os.Exit(1)
+	}
+	if err := profileReadModelEventHandler.StartSubscribing(ctx); err != nil {
+		logger.Error("start profile read model event handler", "err", err)
+		os.Exit(1)
+	}
+	defer profileReadModelEventHandler.StopSubscribing()
+
+	profileImageUploadedAuthUserEventHandler, err := profile.NewProfileImageUploadedAuthUserEventHandler(orisunStore, checkpointer, authService, logger)
+	if err != nil {
+		logger.Error("create profile image uploaded auth user event handler", "err", err)
+		os.Exit(1)
+	}
+	if err := profileImageUploadedAuthUserEventHandler.StartSubscribing(ctx); err != nil {
+		logger.Error("start profile image uploaded auth user event handler", "err", err)
+		os.Exit(1)
+	}
+	defer profileImageUploadedAuthUserEventHandler.StopSubscribing()
 
 	todoReadModelEventHandler, err := todo.NewTodoReadModelEventHandler(orisunStore, checkpointer, todoReadModel, bus, logger)
 	if err != nil {
