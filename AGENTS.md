@@ -42,31 +42,31 @@ Translate, do not blindly copy:
 
 ## Architecture
 
-All business mutations are recorded as immutable Orisun events. PostgreSQL stores read models and auth/session tables. Projection handlers update read models after events are published and checkpointed.
+All business mutations are recorded as immutable Orisun events. PostgreSQL stores read models and auth/session tables. Event handlers update read models after events are published and checkpointed.
 
 Typical write flow:
 
 1. HTTP handler parses and validates input.
 2. Feature command/service loads Orisun events and reconstructs state.
 3. Command appends new domain event(s).
-4. Projector updates PostgreSQL read models and publishes NATS notifications.
+4. Event handler updates PostgreSQL read models and publishes NATS notifications.
 5. Datastar SSE watchers patch server-rendered fragments.
 
 Keep these boundaries intact:
 
 - Do not mutate business state directly in PostgreSQL.
 - Do not bypass event saving for domain changes.
-- Use projector checkpoints for replayable event handlers.
-- Keep route, command/service, projector, and UI code within the owning feature slice.
+- Use event-handler checkpoints for replayable event handlers.
+- Keep route, command/service, event handler, read model, and UI code within the owning feature slice.
 - Every Orisun query criterion and append subset query should include `eventType`; subscriptions are the exception.
 - When changing Orisun query or append shapes, update the matching event-store indexes/documentation if present.
 - When changing PostgreSQL read-model queries, add/update SQL indexes in migrations for predicates, joins, ordering, and fan-out paths.
 
 ## Feature Ownership
 
-Features own their read models. A feature must not query another feature's projection tables directly. If it needs data from another feature, project the required facts into its own read model through its own projector.
+Features own their read models. A feature must not query another feature's projection tables directly. If it needs data from another feature, project the required facts into its own read model through its own event handler.
 
-Command handlers and projectors should use narrow injected ports for external side effects rather than importing broad infrastructure into domain logic.
+Command handlers and event handlers should use narrow injected ports for external side effects rather than importing broad infrastructure into domain logic.
 
 Follow the `frases-backend` command-handler pattern when porting mutations:
 
@@ -89,7 +89,7 @@ Keep command responses and read-model updates separate.
 - Dev hot reload follows Northstar's `/reload` SSE and `/hotreload` ping pattern; keep it gated to development.
 - This preserves the command/read split: commands change facts; read streams publish the projected UI.
 
-For example, todo create clears the input over SSE, while `/todos/stream` patches `#todo-list` after the projector updates the read model.
+For example, todo create clears the input over SSE, while `/todos/stream` patches `#todo-list` after the event handler updates the read model.
 
 ## NATS KV View-State Pattern
 
@@ -147,16 +147,16 @@ When porting DaisyUI-style screens:
 
 | Path | Purpose |
 | --- | --- |
-| `cmd/server/main.go` | App entry point, infrastructure wiring, projector startup |
+| `cmd/server/main.go` | App entry point, infrastructure wiring, event-handler startup |
 | `internal/httpui/router.go` | Top-level HTTP router and middleware |
 | `internal/httpui/*_handlers.go` | Feature route registration and handlers |
 | `internal/httpui/reload.go` | Development hot-reload SSE endpoints |
 | `internal/views` | Server-rendered `.templ` components and generated Go |
 | `internal/resources` | Static asset handler and path helpers |
-| `internal/features/todo` | Example Todo feature, commands, read model, projector |
+| `internal/features/todo` | Example Todo feature, commands, read model, event handler |
 | `internal/features/profile` | Profile commands/storage integration |
 | `internal/auth` | Auth, sessions, onboarding, password flows |
-| `internal/eventstore` | Orisun adapter, event types, checkpoints, projector runner |
+| `internal/eventstore` | Orisun adapter, event types, checkpoints, global event handler |
 | `internal/natsbus` | NATS notification bus |
 | `internal/viewstore` | Future home for NATS KV view-state adapter when ported |
 | `internal/postgres` | PostgreSQL connection |

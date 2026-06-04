@@ -93,15 +93,21 @@ func main() {
 	authService := auth.NewService(db, orisunStore, orisunStore, email.BrevoSender{
 		APIKey: cfg.BrevoAPIKey, SenderEmail: cfg.BrevoSenderEmail, SenderName: cfg.BrevoSenderName,
 	}, cfg.AppURL, !cfg.DevelopmentCookie)
-	todoService := todo.NewService(db, orisunStore, orisunStore, bus)
+	todoReadModel := todo.NewReadModel(db)
+	todoService := todo.NewService(todoReadModel, orisunStore, orisunStore, bus)
 	profileService := profile.NewService(db, orisunStore, storageProvider)
 
 	checkpointer := eventstore.NewPostgresCheckpointer(db)
-	todoProjector := todo.NewProjector(db, bus)
-	if err := (eventstore.Projector{Name: "todo_read_model_event_handler", Store: orisunStore, Checkpointer: checkpointer, Query: todo.Query(), Logger: logger, Handle: todoProjector.Handle}).Start(ctx); err != nil {
-		logger.Error("start todo projector", "err", err)
+	todoReadModelEventHandler, err := todo.NewTodoReadModelEventHandler(orisunStore, checkpointer, todoReadModel, bus, logger)
+	if err != nil {
+		logger.Error("create todo read model event handler", "err", err)
 		os.Exit(1)
 	}
+	if err := todoReadModelEventHandler.StartSubscribing(ctx); err != nil {
+		logger.Error("start todo read model event handler", "err", err)
+		os.Exit(1)
+	}
+	defer todoReadModelEventHandler.StopSubscribing()
 
 	app := httpui.Server{Auth: authService, Todos: todoService, Profile: profileService, Subscriber: bus, Development: cfg.DevelopmentCookie}
 	server := &http.Server{Addr: ":" + cfg.Port, Handler: app.Routes(), ReadHeaderTimeout: 5 * time.Second}
