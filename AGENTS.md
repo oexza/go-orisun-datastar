@@ -2,7 +2,7 @@
 
 This repository is the Go/chi/templ port of the event-sourced Hono starters. Treat the sibling `../frases-backend` project as the richer reference implementation for architecture, UX patterns, feature boundaries, Datastar flows, CQRS-style SSE, NATS KV view-state, and visual direction. Use `../hono-event-starter` only as the smaller starter reference.
 
-The app uses server-rendered templ components, Datastar SSE, PostgreSQL read models, Orisun events, NATS notifications, Brevo email, and S3/R2/Garage-compatible storage.
+The app uses server-rendered templ components, Datastar SSE, SQLite read models, embedded Orisun SQLite events, NATS notifications, Brevo email, and S3/R2/Garage-compatible storage.
 
 ## Commands
 
@@ -36,31 +36,32 @@ Translate, do not blindly copy:
 - Hono routes become chi handlers in `internal/httpui`; keep route registration split by feature file rather than growing `router.go`.
 - JSX render helpers become real `.templ` components in `internal/views`; shared layout/navigation/indicator components belong in `components.templ`, and generated `*_templ.go` files are build artifacts from `task templ`.
 - TypeScript command classes and handlers become Go command structs plus handler functions with narrow ports.
+- Frases command metadata becomes `eventstore.CommandMetadata`; HTTP mutation routes should attach `eventstore.HTTPCommandMetadata` when invoking command handlers/services.
 - Drizzle schema/index changes become SQL migrations under `migrations`.
 - Datastar usage should call the official Datastar Go SDK directly. Keep app-specific helpers close to the route/feature using them.
-- `ViewStore` / `NatsViewStore` concepts should become Go interfaces/adapters, not ad hoc map globals.
+- `ViewStore` / `NatsViewStore` concepts live in `internal/viewstore`; use that abstraction for per-session view-state instead of ad hoc map globals.
 
 ## Architecture
 
-All business mutations are recorded as immutable Orisun events. PostgreSQL stores read models and auth/session tables. Projection handlers update read models after events are published and checkpointed.
+All business mutations are recorded as immutable Orisun events. SQLite stores read models and auth/session tables. Projection handlers update read models after events are published and checkpointed.
 
 Typical write flow:
 
 1. HTTP handler parses and validates input.
 2. Feature command/service loads Orisun events and reconstructs state.
 3. Command appends new domain event(s).
-4. Projector updates PostgreSQL read models and publishes NATS notifications.
+4. Projector updates SQLite read models and publishes NATS notifications.
 5. Datastar SSE watchers patch server-rendered fragments.
 
 Keep these boundaries intact:
 
-- Do not mutate business state directly in PostgreSQL.
+- Do not mutate business state directly in SQLite.
 - Do not bypass event saving for domain changes.
 - Use projector checkpoints for replayable event handlers.
 - Keep route, command/service, projector, and UI code within the owning feature slice.
 - Every Orisun query criterion and append subset query should include `eventType`; subscriptions are the exception.
 - When changing Orisun query or append shapes, update the matching event-store indexes/documentation if present.
-- When changing PostgreSQL read-model queries, add/update SQL indexes in migrations for predicates, joins, ordering, and fan-out paths.
+- When changing SQLite read-model queries, add/update SQL indexes in migrations for predicates, joins, ordering, and fan-out paths.
 
 ## Feature Ownership
 
@@ -108,7 +109,7 @@ The full KV view-state flow is:
 
 Keep KV payloads small. Do not store generated images, uploaded file bytes, or other large blobs in NATS KV. Durable media belongs in object storage/domain events; large transient media should be streamed directly to the requesting action response as a targeted signal patch.
 
-Current Go-port status: todo SSE uses simple NATS pub/sub invalidation and read-model reload. It does not yet implement the richer `ViewStore`/NATS KV watcher pattern from `frases-backend`.
+Current Go-port status: todo SSE now uses `internal/viewstore` for the Frases-style view-state path. Projection notifications trigger a read-model reload into ViewStore, and the SSE route patches only from the ViewStore watcher. Other features should follow this pattern as they are ported.
 
 ## Datastar and UI
 
@@ -158,10 +159,10 @@ When porting DaisyUI-style screens:
 | `internal/auth` | Auth, sessions, onboarding, password flows |
 | `internal/eventstore` | Orisun adapter, event types, checkpoints, projector runner |
 | `internal/natsbus` | NATS notification bus |
-| `internal/viewstore` | Future home for NATS KV view-state adapter when ported |
-| `internal/postgres` | PostgreSQL connection |
+| `internal/viewstore` | Frases-style per-session view-state store with NATS KV and memory fallback |
+| `internal/appdb` | SQLite database wrapper backed by `github.com/delaneyj/toolbelt/db` |
 | `internal/storage` | S3/R2/Garage storage |
-| `migrations` | PostgreSQL schema and index migrations |
+| `migrations` | SQLite schema and index migrations |
 | `src/input.css` | Editable CSS source |
 | `static/style.css` | Generated stylesheet served by the app |
 | `Taskfile.yml` | Project task definitions |

@@ -8,27 +8,22 @@ import (
 	"time"
 
 	orisunconfig "github.com/oexza/Orisun/config"
-	embeddedpg "github.com/oexza/Orisun/embedded/postgres"
+	embeddedsqlite "github.com/oexza/Orisun/embedded/sqlite"
 	orisunlog "github.com/oexza/Orisun/logging"
 	orisunapi "github.com/oexza/Orisun/orisun"
 )
 
 type EmbeddedOrisun struct {
-	store    *embeddedpg.Store
+	store    *embeddedsqlite.Store
 	boundary string
 }
 
 type EmbeddedConfig struct {
-	Boundary         string
-	PostgresHost     string
-	PostgresPort     string
-	PostgresUser     string
-	PostgresPassword string
-	PostgresDatabase string
-	PostgresSSLMode  string
-	NATSStoreDir     string
-	NATSPort         int
-	LogLevel         string
+	Boundary     string
+	SQLiteDir    string
+	NATSStoreDir string
+	NATSPort     int
+	LogLevel     string
 }
 
 func StartEmbeddedOrisun(ctx context.Context, cfg EmbeddedConfig) (*EmbeddedOrisun, error) {
@@ -39,8 +34,8 @@ func StartEmbeddedOrisun(ctx context.Context, cfg EmbeddedConfig) (*EmbeddedOris
 	if cfg.Boundary == "" {
 		cfg.Boundary = "hono_event_starter"
 	}
-	if cfg.PostgresSSLMode == "" {
-		cfg.PostgresSSLMode = "disable"
+	if cfg.SQLiteDir == "" {
+		cfg.SQLiteDir = "data/orisun"
 	}
 	if cfg.NATSStoreDir == "" {
 		cfg.NATSStoreDir = "/tmp/go-event-starter-orisun-nats"
@@ -52,15 +47,8 @@ func StartEmbeddedOrisun(ctx context.Context, cfg EmbeddedConfig) (*EmbeddedOris
 		cfg.LogLevel = "info"
 	}
 
-	appConfig.Backend.Type = "postgres"
-	appConfig.Postgres.Host = cfg.PostgresHost
-	appConfig.Postgres.Port = cfg.PostgresPort
-	appConfig.Postgres.User = cfg.PostgresUser
-	appConfig.Postgres.Password = cfg.PostgresPassword
-	appConfig.Postgres.Name = cfg.PostgresDatabase
-	appConfig.Postgres.SSLMode = cfg.PostgresSSLMode
-	appConfig.Postgres.Schemas = cfg.Boundary + ":public,orisun_admin:admin"
-	appConfig.Postgres.ListenEnabled = true
+	appConfig.Backend.Type = "sqlite"
+	appConfig.Sqlite.Dir = cfg.SQLiteDir
 	appConfig.Boundaries = fmt.Sprintf(`[{"name":%q,"description":"Starter app events"},{"name":"orisun_admin","description":"Orisun admin boundary"}]`, cfg.Boundary)
 	if err := appConfig.ParseBoundaries(); err != nil {
 		return nil, err
@@ -72,7 +60,7 @@ func StartEmbeddedOrisun(ctx context.Context, cfg EmbeddedConfig) (*EmbeddedOris
 	appConfig.Logging.Level = cfg.LogLevel
 
 	logger := orisunlog.InitializeDefaultLogger(appConfig.Logging)
-	store, err := embeddedpg.Start(ctx, appConfig, logger)
+	store, err := embeddedsqlite.Start(ctx, appConfig, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +69,7 @@ func StartEmbeddedOrisun(ctx context.Context, cfg EmbeddedConfig) (*EmbeddedOris
 
 func (s *EmbeddedOrisun) Close(ctx context.Context) {
 	if s != nil && s.store != nil {
-		s.store.Close(ctx)
+		s.store.Close()
 	}
 }
 
@@ -170,7 +158,7 @@ func (s *EmbeddedOrisun) SubscribeToEvents(ctx context.Context, subscriberName s
 			}
 			_ = handle(ctx, ResolvedEvent{
 				Position: fromOrisunPosition(event.Position),
-				Event: DomainEvent{EventID: event.EventId, EventType: event.EventType, Data: unflattenMap(data), Metadata: metadata},
+				Event:    DomainEvent{EventID: event.EventId, EventType: event.EventType, Data: unflattenMap(data), Metadata: metadata},
 			})
 		}
 	}()

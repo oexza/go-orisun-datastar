@@ -1,25 +1,25 @@
 CREATE TABLE IF NOT EXISTS projector_checkpoint (
     id TEXT PRIMARY KEY,
     name TEXT UNIQUE NOT NULL,
-    commit_position NUMERIC(20, 0) NOT NULL,
-    prepare_position NUMERIC(20, 0) NOT NULL,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    commit_position INTEGER NOT NULL,
+    prepare_position INTEGER NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS auth_user (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE,
-    email_verified BOOLEAN NOT NULL DEFAULT false,
+    email_verified INTEGER NOT NULL DEFAULT 0,
     image TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     username TEXT UNIQUE,
     display_username TEXT,
     role TEXT,
-    banned BOOLEAN DEFAULT false,
+    banned INTEGER DEFAULT 0,
     ban_reason TEXT,
-    ban_expires TIMESTAMPTZ,
+    ban_expires TEXT,
     user_registered_id TEXT NOT NULL
 );
 
@@ -35,22 +35,22 @@ CREATE TABLE IF NOT EXISTS auth_account (
     access_token TEXT,
     refresh_token TEXT,
     id_token TEXT,
-    access_token_expires_at TIMESTAMPTZ,
-    refresh_token_expires_at TIMESTAMPTZ,
+    access_token_expires_at TEXT,
+    refresh_token_expires_at TEXT,
     scope TEXT,
     password TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS account_userId_idx ON auth_account (user_id);
 
 CREATE TABLE IF NOT EXISTS auth_session (
     id TEXT PRIMARY KEY,
-    expires_at TIMESTAMPTZ NOT NULL,
+    expires_at TEXT NOT NULL,
     token TEXT NOT NULL UNIQUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     ip_address TEXT,
     user_agent TEXT,
     user_id TEXT NOT NULL REFERENCES auth_user(id) ON DELETE CASCADE,
@@ -63,9 +63,9 @@ CREATE TABLE IF NOT EXISTS auth_verification (
     id TEXT PRIMARY KEY,
     identifier TEXT NOT NULL,
     value TEXT NOT NULL,
-    expires_at TIMESTAMPTZ NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS verification_identifier_idx ON auth_verification (identifier);
@@ -78,10 +78,10 @@ CREATE TABLE IF NOT EXISTS profile_stats (
     image TEXT,
     bio TEXT,
     header_image_url TEXT,
-    last_event_commit_position NUMERIC(20, 0) NOT NULL,
-    last_event_prepare_position NUMERIC(20, 0) NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    last_event_commit_position INTEGER NOT NULL,
+    last_event_prepare_position INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS profile_stats_user_id_idx ON profile_stats (user_id);
@@ -91,13 +91,13 @@ CREATE TABLE IF NOT EXISTS todo_items (
     todo_id TEXT PRIMARY KEY,
     user_registered_id TEXT NOT NULL,
     title TEXT NOT NULL,
-    completed BOOLEAN NOT NULL DEFAULT false,
-    completed_at TIMESTAMPTZ,
-    deleted_at TIMESTAMPTZ,
-    last_event_commit_position NUMERIC(20, 0) NOT NULL,
-    last_event_prepare_position NUMERIC(20, 0) NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    completed INTEGER NOT NULL DEFAULT 0,
+    completed_at TEXT,
+    deleted_at TEXT,
+    last_event_commit_position INTEGER NOT NULL,
+    last_event_prepare_position INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS todo_items_user_active_created_idx

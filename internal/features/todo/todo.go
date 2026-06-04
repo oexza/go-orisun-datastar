@@ -3,8 +3,7 @@ package todo
 import (
 	"context"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
+	"github.com/example/hono-event-starter-go/internal/appdb"
 	"github.com/example/hono-event-starter-go/internal/eventstore"
 	"github.com/example/hono-event-starter-go/internal/views"
 )
@@ -18,13 +17,13 @@ const (
 )
 
 type Service struct {
-	db        *pgxpool.Pool
+	db        *appdb.DB
 	saver     eventstore.Saver
 	retriever eventstore.Retriever
 	publisher eventstore.Publisher
 }
 
-func NewService(db *pgxpool.Pool, saver eventstore.Saver, retriever eventstore.Retriever, publisher eventstore.Publisher) *Service {
+func NewService(db *appdb.DB, saver eventstore.Saver, retriever eventstore.Retriever, publisher eventstore.Publisher) *Service {
 	return &Service{db: db, saver: saver, retriever: retriever, publisher: publisher}
 }
 
@@ -55,43 +54,55 @@ func (s *Service) List(ctx context.Context, userRegisteredID string) ([]views.To
 	return todos, rows.Err()
 }
 
-func (s *Service) Create(ctx context.Context, userRegisteredID, title string) (string, error) {
+func (s *Service) Create(ctx context.Context, userRegisteredID, title string, metadata ...CommandMetadata) (string, error) {
 	result, err := CreateTodoCommandHandler(ctx, CreateTodoCommand{
 		UserRegisteredID: userRegisteredID,
 		Title:            title,
+		Metadata:         firstMetadata(metadata),
 	}, s.saver)
 	return result.TodoID, err
 }
 
-func (s *Service) Rename(ctx context.Context, userRegisteredID, todoID, title string) error {
+func (s *Service) Rename(ctx context.Context, userRegisteredID, todoID, title string, metadata ...CommandMetadata) error {
 	_, err := RenameTodoCommandHandler(ctx, RenameTodoCommand{
 		UserRegisteredID: userRegisteredID,
 		TodoID:           todoID,
 		Title:            title,
+		Metadata:         firstMetadata(metadata),
 	}, s.saver, s.retriever)
 	return err
 }
 
-func (s *Service) Complete(ctx context.Context, userRegisteredID, todoID string) error {
+func (s *Service) Complete(ctx context.Context, userRegisteredID, todoID string, metadata ...CommandMetadata) error {
 	_, err := CompleteTodoCommandHandler(ctx, CompleteTodoCommand{
 		UserRegisteredID: userRegisteredID,
 		TodoID:           todoID,
+		Metadata:         firstMetadata(metadata),
 	}, s.saver, s.retriever)
 	return err
 }
 
-func (s *Service) Reopen(ctx context.Context, userRegisteredID, todoID string) error {
+func (s *Service) Reopen(ctx context.Context, userRegisteredID, todoID string, metadata ...CommandMetadata) error {
 	_, err := ReopenTodoCommandHandler(ctx, ReopenTodoCommand{
 		UserRegisteredID: userRegisteredID,
 		TodoID:           todoID,
+		Metadata:         firstMetadata(metadata),
 	}, s.saver, s.retriever)
 	return err
 }
 
-func (s *Service) Delete(ctx context.Context, userRegisteredID, todoID string) error {
+func (s *Service) Delete(ctx context.Context, userRegisteredID, todoID string, metadata ...CommandMetadata) error {
 	_, err := DeleteTodoCommandHandler(ctx, DeleteTodoCommand{
 		UserRegisteredID: userRegisteredID,
 		TodoID:           todoID,
+		Metadata:         firstMetadata(metadata),
 	}, s.saver, s.retriever)
 	return err
+}
+
+func firstMetadata(metadata []CommandMetadata) CommandMetadata {
+	if len(metadata) == 0 || metadata[0] == nil {
+		return CommandMetadata{}
+	}
+	return metadata[0]
 }

@@ -9,26 +9,26 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/example/hono-event-starter-go/internal/appdb"
 	"github.com/example/hono-event-starter-go/internal/eventstore"
 	"github.com/example/hono-event-starter-go/internal/storage"
 	"github.com/example/hono-event-starter-go/internal/views"
 )
 
 const (
-	ProfileBioUpdated           = "ProfileBioUpdated"
-	ProfileImageUploaded        = "ProfileImageUploaded"
-	ProfileHeaderImageUploaded  = "ProfileHeaderImageUploaded"
+	ProfileBioUpdated          = "ProfileBioUpdated"
+	ProfileImageUploaded       = "ProfileImageUploaded"
+	ProfileHeaderImageUploaded = "ProfileHeaderImageUploaded"
 )
 
 type Service struct {
-	db      *pgxpool.Pool
+	db      *appdb.DB
 	store   eventstore.Saver
 	storage storage.Provider
 }
 
-func NewService(db *pgxpool.Pool, store eventstore.Saver, storage storage.Provider) *Service {
+func NewService(db *appdb.DB, store eventstore.Saver, storage storage.Provider) *Service {
 	return &Service{db: db, store: store, storage: storage}
 }
 

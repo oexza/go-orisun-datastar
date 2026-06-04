@@ -11,7 +11,7 @@ import (
 	"github.com/example/hono-event-starter-go/internal/eventstore"
 )
 
-type CommandMetadata map[string]any
+type CommandMetadata = eventstore.CommandMetadata
 
 type CreateTodoCommand struct {
 	UserRegisteredID string
@@ -313,10 +313,5 @@ func todoScope(todoID, userRegisteredID string) map[string]any {
 }
 
 func metadataWithQuery(metadata CommandMetadata, query eventstore.Query) map[string]any {
-	out := make(map[string]any, len(metadata)+1)
-	for key, value := range metadata {
-		out[key] = value
-	}
-	out["query"] = eventstore.MustJSON(query)
-	return out
+	return eventstore.MergeMetadata(map[string]any{"query": eventstore.MustJSON(query)}, metadata)
 }

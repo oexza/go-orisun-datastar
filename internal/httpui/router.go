@@ -16,6 +16,7 @@ import (
 	"github.com/example/hono-event-starter-go/internal/features/todo"
 	"github.com/example/hono-event-starter-go/internal/resources"
 	"github.com/example/hono-event-starter-go/internal/views"
+	"github.com/example/hono-event-starter-go/internal/viewstore"
 )
 
 type contextKey string
@@ -27,6 +28,7 @@ type Server struct {
 	Todos       *todo.Service
 	Profile     *profile.Service
 	Subscriber  eventstore.MessageSubscriber
+	ViewStore   viewstore.Store
 	Development bool
 }
 
@@ -87,4 +89,12 @@ func (s Server) requireVerifiedEmail(next http.Handler) http.Handler {
 func currentUser(r *http.Request) views.User {
 	user, _ := r.Context().Value(userKey).(views.User)
 	return user
+}
+
+func (s Server) sessionID(r *http.Request) string {
+	cookie, err := r.Cookie(s.Auth.SessionCookieName())
+	if err == nil && cookie.Value != "" {
+		return cookie.Value
+	}
+	return currentUser(r).UserRegisteredID
 }

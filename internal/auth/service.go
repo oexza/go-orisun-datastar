@@ -12,18 +12,17 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/example/hono-event-starter-go/internal/appdb"
 	"github.com/example/hono-event-starter-go/internal/email"
 	"github.com/example/hono-event-starter-go/internal/eventstore"
 	"github.com/example/hono-event-starter-go/internal/views"
 )
 
 const (
-	UserRegistered                 = "UserRegistered"
-	UserNameChanged                = "UserNameChanged"
+	UserRegistered                = "UserRegistered"
+	UserNameChanged               = "UserNameChanged"
 	EmailVerificationOTPGenerated = "EmailVerificationOTPGenerated"
 	EmailVerificationOTPValidated = "EmailVerificationOTPValidated"
 	EmailVerificationOTPSent      = "EmailVerificationOTPSent"
@@ -33,7 +32,7 @@ const (
 )
 
 type Service struct {
-	db            *pgxpool.Pool
+	db            *appdb.DB
 	store         eventstore.Saver
 	retriever     eventstore.Retriever
 	email         email.Sender
@@ -42,7 +41,7 @@ type Service struct {
 	sessionCookie string
 }
 
-func NewService(db *pgxpool.Pool, saver eventstore.Saver, retriever eventstore.Retriever, sender email.Sender, appURL string, secureCookie bool) *Service {
+func NewService(db *appdb.DB, saver eventstore.Saver, retriever eventstore.Retriever, sender email.Sender, appURL string, secureCookie bool) *Service {
 	return &Service{
 		db:            db,
 		store:         saver,
@@ -160,7 +159,7 @@ func (s *Service) CurrentUser(ctx context.Context, r *http.Request) (views.User,
 	}
 	user, err := s.UserBySessionToken(ctx, cookie.Value)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, appdb.ErrNoRows) {
 			return views.User{}, false, nil
 		}
 		return views.User{}, false, err
@@ -392,7 +391,7 @@ func (s *Service) userByEmailWithPassword(ctx context.Context, emailAddress stri
 	return user, hash, err
 }
 
-func scanUser(row pgx.Row) (views.User, error) {
+func scanUser(row appdb.Row) (views.User, error) {
 	var user views.User
 	err := row.Scan(&user.ID, &user.UserRegisteredID, &user.Name, &user.Username, &user.Email, &user.EmailVerified, &user.Image, &user.Bio, &user.HeaderImageURL)
 	return user, err

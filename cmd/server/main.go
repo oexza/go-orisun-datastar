@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/example/hono-event-starter-go/internal/appdb"
 	"github.com/example/hono-event-starter-go/internal/auth"
 	"github.com/example/hono-event-starter-go/internal/config"
 	"github.com/example/hono-event-starter-go/internal/email"
@@ -18,8 +19,8 @@ import (
 	"github.com/example/hono-event-starter-go/internal/features/todo"
 	"github.com/example/hono-event-starter-go/internal/httpui"
 	"github.com/example/hono-event-starter-go/internal/natsbus"
-	"github.com/example/hono-event-starter-go/internal/postgres"
 	"github.com/example/hono-event-starter-go/internal/storage"
+	"github.com/example/hono-event-starter-go/internal/viewstore"
 )
 
 func main() {
@@ -33,31 +34,31 @@ func main() {
 	cfg := config.Load()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	db, err := postgres.Open(ctx, cfg.PostgresURL)
+	db, err := appdb.Open(ctx, cfg.SQLitePath)
 	if err != nil {
-		logger.Error("open postgres", "err", err)
+		logger.Error("open sqlite", "err", err)
 		os.Exit(1)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			logger.Error("close sqlite", "err", err)
+		}
+	}()
 
-	if err := postgres.Migrate(ctx, db); err != nil {
-		logger.Error("migrate postgres", "err", err)
-		os.Exit(1)
+	if *migrateOnly {
+		logger.Info("sqlite migrations complete", "path", cfg.SQLitePath)
+		return
 	}
-	if *migrateOnly || *seedOnly {
+	if *seedOnly {
+		logger.Info("seed requested; no seed tasks are currently defined")
 		return
 	}
 
 	orisunStore, err := eventstore.StartEmbeddedOrisun(ctx, eventstore.EmbeddedConfig{
-		Boundary:         cfg.OrisunBoundary,
-		PostgresHost:     cfg.PostgresHost,
-		PostgresPort:     cfg.PostgresPort,
-		PostgresUser:     cfg.PostgresUser,
-		PostgresPassword: cfg.PostgresPassword,
-		PostgresDatabase: cfg.PostgresDatabase,
-		PostgresSSLMode:  cfg.PostgresSSLMode,
-		NATSStoreDir:     eventstore.PollingStoreDir(),
-		LogLevel:         "info",
+		Boundary:     cfg.OrisunBoundary,
+		SQLiteDir:    cfg.OrisunSQLiteDir,
+		NATSStoreDir: eventstore.PollingStoreDir(),
+		LogLevel:     "info",
 	})
 	if err != nil {
 		logger.Error("start embedded orisun", "err", err)
@@ -71,6 +72,13 @@ func main() {
 		os.Exit(1)
 	}
 	defer bus.Close()
+
+	var viewStore viewstore.Store
+	viewStore, err = viewstore.NewNATSStore(bus.Conn(), "go-starter-view-state", 5*time.Minute)
+	if err != nil {
+		logger.Warn("using in-memory view store fallback", "err", err)
+		viewStore = viewstore.NewMemoryStore()
+	}
 
 	storageProvider := storage.Provider(storage.NoopProvider{})
 	if cfg.StorageProvider == "garage" && cfg.StorageBucket != "" {
@@ -96,14 +104,14 @@ func main() {
 	todoService := todo.NewService(db, orisunStore, orisunStore, bus)
 	profileService := profile.NewService(db, orisunStore, storageProvider)
 
-	checkpointer := eventstore.NewPostgresCheckpointer(db)
+	checkpointer := eventstore.NewSQLiteCheckpointer(db)
 	todoProjector := todo.NewProjector(db, bus)
 	if err := (eventstore.Projector{Name: "todo_read_model_event_handler", Store: orisunStore, Checkpointer: checkpointer, Query: todo.Query(), Logger: logger, Handle: todoProjector.Handle}).Start(ctx); err != nil {
 		logger.Error("start todo projector", "err", err)
 		os.Exit(1)
 	}
 
-	app := httpui.Server{Auth: authService, Todos: todoService, Profile: profileService, Subscriber: bus, Development: cfg.DevelopmentCookie}
+	app := httpui.Server{Auth: authService, Todos: todoService, Profile: profileService, Subscriber: bus, ViewStore: viewStore, Development: cfg.DevelopmentCookie}
 	server := &http.Server{Addr: ":" + cfg.Port, Handler: app.Routes(), ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		logger.Info("starting server", "addr", "http://localhost:"+cfg.Port)

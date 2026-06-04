@@ -4,17 +4,16 @@ import (
 	"context"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
+	"github.com/example/hono-event-starter-go/internal/appdb"
 	"github.com/example/hono-event-starter-go/internal/eventstore"
 )
 
 type Projector struct {
-	db        *pgxpool.Pool
+	db        *appdb.DB
 	publisher eventstore.Publisher
 }
 
-func NewProjector(db *pgxpool.Pool, publisher eventstore.Publisher) *Projector {
+func NewProjector(db *appdb.DB, publisher eventstore.Publisher) *Projector {
 	return &Projector{db: db, publisher: publisher}
 }
 

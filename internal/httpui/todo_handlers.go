@@ -7,9 +7,15 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/starfederation/datastar-go/datastar"
 
+	"github.com/example/hono-event-starter-go/internal/eventstore"
 	"github.com/example/hono-event-starter-go/internal/features/todo"
 	"github.com/example/hono-event-starter-go/internal/views"
+	"github.com/example/hono-event-starter-go/internal/viewstore"
 )
+
+type todoListViewState struct {
+	Todos []views.Todo `json:"todos"`
+}
 
 func (s Server) todoRoutes(r chi.Router) {
 	r.Get("/todos", s.todosPage)
@@ -35,6 +41,7 @@ func (s Server) todosStream(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 	sse := datastar.NewSSE(w, r)
 	ctx := r.Context()
+	key := viewstore.TodoListKey(s.sessionID(r), user.UserRegisteredID)
 
 	updates := make(chan struct{}, 1)
 	notify := func() {
@@ -43,6 +50,17 @@ func (s Server) todosStream(w http.ResponseWriter, r *http.Request) {
 		default:
 		}
 	}
+
+	if err := s.refreshTodoViewState(ctx, key, user.UserRegisteredID); err != nil {
+		_ = alert(sse, err.Error())
+		return
+	}
+	watcher, err := s.ViewStore.Watch(ctx, key, viewstore.WatchOptions{IgnoreDeletes: true})
+	if err != nil {
+		_ = alert(sse, err.Error())
+		return
+	}
+	defer watcher.Stop()
 
 	sub, err := s.Subscriber.Subscribe(ctx, todo.Channel(user.UserRegisteredID), func(context.Context, []byte) {
 		notify()
@@ -59,12 +77,20 @@ func (s Server) todosStream(w http.ResponseWriter, r *http.Request) {
 		case <-ctx.Done():
 			return
 		case <-updates:
-			todos, err := s.Todos.List(ctx, user.UserRegisteredID)
-			if err != nil {
+			if err := s.refreshTodoViewState(ctx, key, user.UserRegisteredID); err != nil {
 				_ = alert(sse, err.Error())
 				return
 			}
-			if err := sse.PatchElementTempl(views.TodoList(todos), datastar.WithSelector("#todo-list"), datastar.WithMode(datastar.ElementPatchModeInner)); err != nil {
+		case entry, ok := <-watcher.Updates():
+			if !ok {
+				return
+			}
+			var state todoListViewState
+			if err := entry.JSON(&state); err != nil {
+				_ = alert(sse, err.Error())
+				return
+			}
+			if err := sse.PatchElementTempl(views.TodoList(state.Todos), datastar.WithSelector("#todo-list"), datastar.WithMode(datastar.ElementPatchModeInner)); err != nil {
 				return
 			}
 		}
@@ -73,7 +99,8 @@ func (s Server) todosStream(w http.ResponseWriter, r *http.Request) {
 
 func (s Server) createTodo(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
-	_, err := s.Todos.Create(r.Context(), currentUser(r).UserRegisteredID, r.FormValue("title"))
+	user := currentUser(r)
+	_, err := s.Todos.Create(r.Context(), user.UserRegisteredID, r.FormValue("title"), eventstore.HTTPCommandMetadata(r, user.UserRegisteredID))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -83,17 +110,29 @@ func (s Server) createTodo(w http.ResponseWriter, r *http.Request) {
 
 func (s Server) renameTodo(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
-	emptySSE(w, r, s.Todos.Rename(r.Context(), currentUser(r).UserRegisteredID, chi.URLParam(r, "todoID"), r.FormValue("title")))
+	user := currentUser(r)
+	emptySSE(w, r, s.Todos.Rename(r.Context(), user.UserRegisteredID, chi.URLParam(r, "todoID"), r.FormValue("title"), eventstore.HTTPCommandMetadata(r, user.UserRegisteredID)))
 }
 
 func (s Server) completeTodo(w http.ResponseWriter, r *http.Request) {
-	emptySSE(w, r, s.Todos.Complete(r.Context(), currentUser(r).UserRegisteredID, chi.URLParam(r, "todoID")))
+	user := currentUser(r)
+	emptySSE(w, r, s.Todos.Complete(r.Context(), user.UserRegisteredID, chi.URLParam(r, "todoID"), eventstore.HTTPCommandMetadata(r, user.UserRegisteredID)))
 }
 
 func (s Server) reopenTodo(w http.ResponseWriter, r *http.Request) {
-	emptySSE(w, r, s.Todos.Reopen(r.Context(), currentUser(r).UserRegisteredID, chi.URLParam(r, "todoID")))
+	user := currentUser(r)
+	emptySSE(w, r, s.Todos.Reopen(r.Context(), user.UserRegisteredID, chi.URLParam(r, "todoID"), eventstore.HTTPCommandMetadata(r, user.UserRegisteredID)))
 }
 
 func (s Server) deleteTodo(w http.ResponseWriter, r *http.Request) {
-	emptySSE(w, r, s.Todos.Delete(r.Context(), currentUser(r).UserRegisteredID, chi.URLParam(r, "todoID")))
+	user := currentUser(r)
+	emptySSE(w, r, s.Todos.Delete(r.Context(), user.UserRegisteredID, chi.URLParam(r, "todoID"), eventstore.HTTPCommandMetadata(r, user.UserRegisteredID)))
+}
+
+func (s Server) refreshTodoViewState(ctx context.Context, key string, userRegisteredID string) error {
+	todos, err := s.Todos.List(ctx, userRegisteredID)
+	if err != nil {
+		return err
+	}
+	return viewstore.PutState(ctx, s.ViewStore, key, todoListViewState{Todos: todos})
 }

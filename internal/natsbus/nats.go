@@ -26,6 +26,10 @@ func (b *Bus) Close() {
 	}
 }
 
+func (b *Bus) Conn() *nats.Conn {
+	return b.conn
+}
+
 func (b *Bus) Publish(ctx context.Context, subject string, data any) error {
 	payload, err := json.Marshal(data)
 	if err != nil {
