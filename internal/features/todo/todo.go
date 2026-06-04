@@ -3,7 +3,6 @@ package todo
 import (
 	"context"
 
-	"github.com/example/hono-event-starter-go/internal/appdb"
 	"github.com/example/hono-event-starter-go/internal/eventstore"
 	"github.com/example/hono-event-starter-go/internal/views"
 )
@@ -17,14 +16,14 @@ const (
 )
 
 type Service struct {
-	db        *appdb.DB
+	readModel TodoReadModelReader
 	saver     eventstore.Saver
 	retriever eventstore.Retriever
 	publisher eventstore.Publisher
 }
 
-func NewService(db *appdb.DB, saver eventstore.Saver, retriever eventstore.Retriever, publisher eventstore.Publisher) *Service {
-	return &Service{db: db, saver: saver, retriever: retriever, publisher: publisher}
+func NewService(readModel TodoReadModelReader, saver eventstore.Saver, retriever eventstore.Retriever, publisher eventstore.Publisher) *Service {
+	return &Service{readModel: readModel, saver: saver, retriever: retriever, publisher: publisher}
 }
 
 func Channel(userRegisteredID string) string {
@@ -32,26 +31,7 @@ func Channel(userRegisteredID string) string {
 }
 
 func (s *Service) List(ctx context.Context, userRegisteredID string) ([]views.Todo, error) {
-	rows, err := s.db.Query(ctx, `
-		SELECT todo_id, title, completed, created_at, updated_at
-		FROM todo_items
-		WHERE user_registered_id = $1 AND deleted_at IS NULL
-		ORDER BY created_at DESC, todo_id DESC
-	`, userRegisteredID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var todos []views.Todo
-	for rows.Next() {
-		var todo views.Todo
-		if err := rows.Scan(&todo.TodoID, &todo.Title, &todo.Completed, &todo.CreatedAt, &todo.UpdatedAt); err != nil {
-			return nil, err
-		}
-		todos = append(todos, todo)
-	}
-	return todos, rows.Err()
+	return s.readModel.List(ctx, userRegisteredID)
 }
 
 func (s *Service) Create(ctx context.Context, userRegisteredID, title string, metadata ...CommandMetadata) (string, error) {
