@@ -9,8 +9,6 @@ import (
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
 )
 
-type CommandMetadata = eventstore.CommandMetadata
-
 type CreateTodoCommand struct {
 	UserRegisteredID string
 	Title            string

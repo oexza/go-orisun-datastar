@@ -19,6 +19,15 @@ type SendEmailValidationOTPCommand struct {
 	Metadata                        CommandMetadata
 }
 
+type emailValidationOTPContext struct {
+	otpID       string
+	code        string
+	expiresAt   string
+	email       string
+	alreadySent bool
+	position    eventstore.Position
+}
+
 func SendEmailValidationOTPCommandHandler(ctx context.Context, command SendEmailValidationOTPCommand, saver eventstore.Saver, retriever eventstore.Retriever, sender EmailSender) error {
 	generatedQuery := emailVerificationOTPGeneratedQuery(command.EmailVerificationOTPGeneratedID)
 	generatedEvents, err := retriever.GetEvents(ctx, eventstore.NoEventPosition, 1, eventstore.Forward, generatedQuery)
@@ -64,4 +73,20 @@ func SendEmailValidationOTPCommandHandler(ctx context.Context, command SendEmail
 	sent := NewEmailVerificationOTPSentEvent(id, time.Now(), command.EmailVerificationOTPGeneratedID, metadataWithQuery(command.Metadata, combineQueries(generatedQuery, userQuery, sentQuery)))
 	_, err = saver.SaveEvents(ctx, []eventstore.DomainEvent{sent}, model.position, append(generatedEvents, userEvents...), combineQueries(generatedQuery, userQuery, sentQuery))
 	return err
+}
+
+func (m *emailValidationOTPContext) handle(resolved eventstore.ResolvedEvent) {
+	switch resolved.Event.EventType {
+	case EmailVerificationOTPGenerated:
+		m.otpID, _ = resolved.Event.Data["emailVerificationOTPGeneratedId"].(string)
+		m.code, _ = resolved.Event.Data["otpCode"].(string)
+		m.expiresAt, _ = resolved.Event.Data["expiresAt"].(string)
+	case UserRegistered:
+		m.email, _ = resolved.Event.Data["email"].(string)
+	case EmailVerificationOTPSent:
+		m.alreadySent = true
+	}
+	if resolved.Position.After(m.position) {
+		m.position = resolved.Position
+	}
 }

@@ -2,6 +2,9 @@ package todo
 
 import (
 	"context"
+	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
 )
@@ -18,14 +21,70 @@ type ReopenTodoResult struct {
 }
 
 func ReopenTodoCommandHandler(ctx context.Context, command ReopenTodoCommand, saver eventstore.Saver, retriever eventstore.Retriever) (ReopenTodoResult, error) {
-	result, err := changeTodoCompletion(ctx, changeTodoCompletionCommand{
-		userRegisteredID: command.UserRegisteredID,
-		todoID:           command.TodoID,
-		complete:         false,
-		metadata:         command.Metadata,
-	}, saver, retriever)
+	model, err := loadReopenTodoContext(ctx, retriever, command.TodoID, command.UserRegisteredID)
 	if err != nil {
 		return ReopenTodoResult{}, err
 	}
-	return ReopenTodoResult{TodoReopenedID: result.eventID, Skipped: result.skipped}, nil
+	if err := model.requireActive(); err != nil {
+		return ReopenTodoResult{}, err
+	}
+	if !model.completed {
+		return ReopenTodoResult{Skipped: true}, nil
+	}
+
+	query := streamQuery(command.TodoID, command.UserRegisteredID)
+	eventID := uuid.NewString()
+	event := NewTodoReopenedEvent(eventID, command.TodoID, command.UserRegisteredID, time.Now(), metadataWithQuery(command.Metadata, query))
+
+	if _, err := saver.SaveEvents(ctx, []eventstore.DomainEvent{event}, model.position, model.events, query); err != nil {
+		return ReopenTodoResult{}, err
+	}
+	return ReopenTodoResult{TodoReopenedID: eventID}, nil
+}
+
+type reopenTodoContext struct {
+	exists    bool
+	deleted   bool
+	completed bool
+	position  eventstore.Position
+	events    []eventstore.ResolvedEvent
+}
+
+func loadReopenTodoContext(ctx context.Context, retriever eventstore.Retriever, todoID, userRegisteredID string) (*reopenTodoContext, error) {
+	query := streamQuery(todoID, userRegisteredID)
+	events, err := retriever.GetEvents(ctx, eventstore.NoEventPosition, 100, eventstore.Forward, query)
+	if err != nil {
+		return nil, err
+	}
+
+	model := &reopenTodoContext{position: eventstore.NoEventPosition, events: events}
+	for _, event := range events {
+		model.handle(event)
+	}
+	return model, nil
+}
+
+func (m *reopenTodoContext) requireActive() error {
+	if !m.exists || m.deleted {
+		return eventstore.ErrNotFound
+	}
+	return nil
+}
+
+func (m *reopenTodoContext) handle(resolved eventstore.ResolvedEvent) {
+	switch resolved.Event.EventType {
+	case TodoCreated:
+		m.exists = true
+		m.deleted = false
+		m.completed = false
+	case TodoCompleted:
+		m.completed = true
+	case TodoReopened:
+		m.completed = false
+	case TodoDeleted:
+		m.deleted = true
+	}
+	if resolved.Position.After(m.position) {
+		m.position = resolved.Position
+	}
 }

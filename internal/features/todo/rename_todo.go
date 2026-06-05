@@ -27,7 +27,7 @@ func RenameTodoCommandHandler(ctx context.Context, command RenameTodoCommand, sa
 		return RenameTodoResult{}, err
 	}
 
-	model, err := loadTodoContext(ctx, retriever, command.TodoID, command.UserRegisteredID)
+	model, err := loadRenameTodoContext(ctx, retriever, command.TodoID, command.UserRegisteredID)
 	if err != nil {
 		return RenameTodoResult{}, err
 	}
@@ -46,4 +46,50 @@ func RenameTodoCommandHandler(ctx context.Context, command RenameTodoCommand, sa
 		return RenameTodoResult{}, err
 	}
 	return RenameTodoResult{TodoRenamedID: eventID}, nil
+}
+
+type renameTodoContext struct {
+	exists   bool
+	deleted  bool
+	title    string
+	position eventstore.Position
+	events   []eventstore.ResolvedEvent
+}
+
+func loadRenameTodoContext(ctx context.Context, retriever eventstore.Retriever, todoID, userRegisteredID string) (*renameTodoContext, error) {
+	query := streamQuery(todoID, userRegisteredID)
+	events, err := retriever.GetEvents(ctx, eventstore.NoEventPosition, 100, eventstore.Forward, query)
+	if err != nil {
+		return nil, err
+	}
+
+	model := &renameTodoContext{position: eventstore.NoEventPosition, events: events}
+	for _, event := range events {
+		model.handle(event)
+	}
+	return model, nil
+}
+
+func (m *renameTodoContext) requireActive() error {
+	if !m.exists || m.deleted {
+		return eventstore.ErrNotFound
+	}
+	return nil
+}
+
+func (m *renameTodoContext) handle(resolved eventstore.ResolvedEvent) {
+	data := resolved.Event.Data
+	switch resolved.Event.EventType {
+	case TodoCreated:
+		m.exists = true
+		m.deleted = false
+		m.title, _ = data["title"].(string)
+	case TodoRenamed:
+		m.title, _ = data["title"].(string)
+	case TodoDeleted:
+		m.deleted = true
+	}
+	if resolved.Position.After(m.position) {
+		m.position = resolved.Position
+	}
 }
