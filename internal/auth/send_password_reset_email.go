@@ -17,6 +17,15 @@ type SendPasswordResetEmailCommand struct {
 	Metadata                 CommandMetadata
 }
 
+type passwordResetEmailContext struct {
+	requestID   string
+	email       string
+	token       string
+	expiresAt   string
+	alreadySent bool
+	position    eventstore.Position
+}
+
 func SendPasswordResetEmailCommandHandler(ctx context.Context, command SendPasswordResetEmailCommand, saver eventstore.Saver, retriever eventstore.Retriever, sender EmailSender, appURL string) error {
 	requestedQuery := passwordResetRequestedQuery(command.PasswordResetRequestedID)
 	requestedEvents, err := retriever.GetEvents(ctx, eventstore.NoEventPosition, 1, eventstore.Forward, requestedQuery)
@@ -54,4 +63,19 @@ func SendPasswordResetEmailCommandHandler(ctx context.Context, command SendPassw
 	sent := NewPasswordResetEmailSentEvent(id, time.Now(), command.PasswordResetRequestedID, metadataWithQuery(command.Metadata, combineQueries(requestedQuery, sentQuery)))
 	_, err = saver.SaveEvents(ctx, []eventstore.DomainEvent{sent}, model.position, requestedEvents, combineQueries(requestedQuery, sentQuery))
 	return err
+}
+
+func (m *passwordResetEmailContext) handle(resolved eventstore.ResolvedEvent) {
+	switch resolved.Event.EventType {
+	case PasswordResetRequested:
+		m.requestID, _ = resolved.Event.Data["passwordResetRequestedId"].(string)
+		m.email, _ = resolved.Event.Data["email"].(string)
+		m.token, _ = resolved.Event.Data["resetToken"].(string)
+		m.expiresAt, _ = resolved.Event.Data["expiresAt"].(string)
+	case PasswordResetEmailSent:
+		m.alreadySent = true
+	}
+	if resolved.Position.After(m.position) {
+		m.position = resolved.Position
+	}
 }
