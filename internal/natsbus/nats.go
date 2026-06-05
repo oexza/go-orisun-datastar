@@ -3,6 +3,7 @@ package natsbus
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	"github.com/nats-io/nats.go"
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
@@ -10,6 +11,7 @@ import (
 
 type Bus struct {
 	conn *nats.Conn
+	owns bool
 }
 
 func Connect(url string) (*Bus, error) {
@@ -17,11 +19,18 @@ func Connect(url string) (*Bus, error) {
 	if err != nil {
 		return nil, err
 	}
+	return &Bus{conn: conn, owns: true}, nil
+}
+
+func FromConn(conn *nats.Conn) (*Bus, error) {
+	if conn == nil {
+		return nil, errors.New("nats connection is nil")
+	}
 	return &Bus{conn: conn}, nil
 }
 
 func (b *Bus) Close() {
-	if b.conn != nil {
+	if b.conn != nil && b.owns {
 		b.conn.Close()
 	}
 }

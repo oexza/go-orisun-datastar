@@ -8,7 +8,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/nats-io/nats.go v1.52.0
-	github.com/oexza/Orisun v0.2.10
+	github.com/oexza/Orisun v0.2.11
 	github.com/starfederation/datastar-go v1.2.2
 	golang.org/x/crypto v0.50.0
 )

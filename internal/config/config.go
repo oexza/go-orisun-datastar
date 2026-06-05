@@ -16,7 +16,6 @@ type Config struct {
 	PostgresPassword  string
 	PostgresDatabase  string
 	PostgresSSLMode   string
-	NATSURL           string
 	OrisunAddress     string
 	OrisunBoundary    string
 	SessionSecret     string
@@ -57,7 +56,6 @@ func Load() Config {
 		PostgresPassword:  env("POSTGRES_PASSWORD", "postgres"),
 		PostgresDatabase:  env("POSTGRES_DB", "go_orisun_datastar"),
 		PostgresSSLMode:   sslMode,
-		NATSURL:           env("NATS_URL", "nats://localhost:4224"),
 		OrisunAddress:     env("ORISUN_HOST", "localhost") + ":" + env("ORISUN_PORT", "5006"),
 		OrisunBoundary:    env("ORISUN_GENERAL_BOUNDARY", "go_orisun_datastar"),
 		SessionSecret:     env("BETTER_AUTH_SECRET", "secret-key-that-should-be-very-secret"),

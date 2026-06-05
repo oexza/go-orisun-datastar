@@ -71,9 +71,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	bus, err := natsbus.Connect(cfg.NATSURL)
+	bus, err := natsbus.FromConn(orisunStore.NATSConnection())
 	if err != nil {
-		logger.Error("connect nats", "err", err)
+		logger.Error("borrow embedded orisun nats", "err", err)
 		os.Exit(1)
 	}
 	defer bus.Close()
