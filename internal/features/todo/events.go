@@ -140,3 +140,7 @@ func NewTodoDeletedEvent(todoDeletedID, todoID, userRegisteredID string, deleted
 func todoScope(todoID, userRegisteredID string) TodoScope {
 	return TodoScope{TodoID: todoID, UserRegisteredID: userRegisteredID}
 }
+
+func Channel(userRegisteredID string) string {
+	return "todo." + userRegisteredID
+}

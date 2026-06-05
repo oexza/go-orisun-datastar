@@ -103,7 +103,11 @@ func (s Server) todosStream(w http.ResponseWriter, r *http.Request) {
 func (s Server) createTodo(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	user := currentUser(r)
-	_, err := s.Todos.CreateWithMetadata(r.Context(), user.UserRegisteredID, r.FormValue("title"), eventstore.HTTPCommandMetadata(r, user.UserRegisteredID))
+	_, err := todo.CreateTodoCommandHandler(r.Context(), todo.CreateTodoCommand{
+		UserRegisteredID: user.UserRegisteredID,
+		Title:            r.FormValue("title"),
+		Metadata:         eventstore.HTTPCommandMetadata(r, user.UserRegisteredID),
+	}, s.EventSaver)
 	if err != nil {
 		writeSSE(w, r, func(sse *datastar.ServerSentEventGenerator) error { return flashError(sse, err.Error()) })
 		return
@@ -114,37 +118,70 @@ func (s Server) createTodo(w http.ResponseWriter, r *http.Request) {
 func (s Server) renameTodo(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	user := currentUser(r)
-	emptySSE(w, r, s.Todos.RenameWithMetadata(r.Context(), user.UserRegisteredID, chi.URLParam(r, "todoID"), r.FormValue("title"), eventstore.HTTPCommandMetadata(r, user.UserRegisteredID)))
+	_, err := todo.RenameTodoCommandHandler(r.Context(), todo.RenameTodoCommand{
+		UserRegisteredID: user.UserRegisteredID,
+		TodoID:           chi.URLParam(r, "todoID"),
+		Title:            r.FormValue("title"),
+		Metadata:         eventstore.HTTPCommandMetadata(r, user.UserRegisteredID),
+	}, s.EventSaver, s.EventRetriever)
+	emptySSE(w, r, err)
 }
 
 func (s Server) completeTodo(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
-	emptySSE(w, r, s.Todos.CompleteWithMetadata(r.Context(), user.UserRegisteredID, chi.URLParam(r, "todoID"), eventstore.HTTPCommandMetadata(r, user.UserRegisteredID)))
+	_, err := todo.CompleteTodoCommandHandler(r.Context(), todo.CompleteTodoCommand{
+		UserRegisteredID: user.UserRegisteredID,
+		TodoID:           chi.URLParam(r, "todoID"),
+		Metadata:         eventstore.HTTPCommandMetadata(r, user.UserRegisteredID),
+	}, s.EventSaver, s.EventRetriever)
+	emptySSE(w, r, err)
 }
 
 func (s Server) reopenTodo(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
-	emptySSE(w, r, s.Todos.ReopenWithMetadata(r.Context(), user.UserRegisteredID, chi.URLParam(r, "todoID"), eventstore.HTTPCommandMetadata(r, user.UserRegisteredID)))
+	_, err := todo.ReopenTodoCommandHandler(r.Context(), todo.ReopenTodoCommand{
+		UserRegisteredID: user.UserRegisteredID,
+		TodoID:           chi.URLParam(r, "todoID"),
+		Metadata:         eventstore.HTTPCommandMetadata(r, user.UserRegisteredID),
+	}, s.EventSaver, s.EventRetriever)
+	emptySSE(w, r, err)
 }
 
 func (s Server) deleteTodo(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
-	emptySSE(w, r, s.Todos.DeleteWithMetadata(r.Context(), user.UserRegisteredID, chi.URLParam(r, "todoID"), eventstore.HTTPCommandMetadata(r, user.UserRegisteredID)))
+	_, err := todo.DeleteTodoCommandHandler(r.Context(), todo.DeleteTodoCommand{
+		UserRegisteredID: user.UserRegisteredID,
+		TodoID:           chi.URLParam(r, "todoID"),
+		Metadata:         eventstore.HTTPCommandMetadata(r, user.UserRegisteredID),
+	}, s.EventSaver, s.EventRetriever)
+	emptySSE(w, r, err)
 }
 
 func (s Server) completeActiveTodos(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
-	emptySSE(w, r, s.Todos.CompleteAllActiveWithMetadata(r.Context(), user.UserRegisteredID, eventstore.HTTPCommandMetadata(r, user.UserRegisteredID)))
+	err := todo.CompleteAllActiveTodosCommandHandler(r.Context(), todo.CompleteAllActiveTodosCommand{
+		UserRegisteredID: user.UserRegisteredID,
+		Metadata:         eventstore.HTTPCommandMetadata(r, user.UserRegisteredID),
+	}, s.Todos, s.EventSaver, s.EventRetriever)
+	emptySSE(w, r, err)
 }
 
 func (s Server) reopenCompletedTodos(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
-	emptySSE(w, r, s.Todos.ReopenAllCompletedWithMetadata(r.Context(), user.UserRegisteredID, eventstore.HTTPCommandMetadata(r, user.UserRegisteredID)))
+	err := todo.ReopenAllCompletedTodosCommandHandler(r.Context(), todo.ReopenAllCompletedTodosCommand{
+		UserRegisteredID: user.UserRegisteredID,
+		Metadata:         eventstore.HTTPCommandMetadata(r, user.UserRegisteredID),
+	}, s.Todos, s.EventSaver, s.EventRetriever)
+	emptySSE(w, r, err)
 }
 
 func (s Server) clearCompletedTodos(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
-	emptySSE(w, r, s.Todos.ClearCompletedWithMetadata(r.Context(), user.UserRegisteredID, eventstore.HTTPCommandMetadata(r, user.UserRegisteredID)))
+	err := todo.ClearCompletedTodosCommandHandler(r.Context(), todo.ClearCompletedTodosCommand{
+		UserRegisteredID: user.UserRegisteredID,
+		Metadata:         eventstore.HTTPCommandMetadata(r, user.UserRegisteredID),
+	}, s.Todos, s.EventSaver, s.EventRetriever)
+	emptySSE(w, r, err)
 }
 
 func (s Server) refreshTodoViewState(ctx context.Context, key string, userRegisteredID string) error {

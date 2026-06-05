@@ -28,12 +28,14 @@ type MessageSubscriber interface {
 }
 
 type Server struct {
-	Auth        *auth.Service
-	Todos       *todo.Service
-	Profile     *profile.Service
-	Subscriber  MessageSubscriber
-	ViewStore   viewstore.Store
-	Development bool
+	Auth           *auth.Service
+	Todos          todo.TodoReadModelReader
+	EventSaver     eventstore.Saver
+	EventRetriever eventstore.Retriever
+	ProfileStorage profile.ObjectStore
+	Subscriber     MessageSubscriber
+	ViewStore      viewstore.Store
+	Development    bool
 }
 
 func (s Server) Routes() http.Handler {

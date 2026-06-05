@@ -8,6 +8,7 @@ import (
 	"github.com/starfederation/datastar-go/datastar"
 
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
+	"github.com/oexza/go-orisun-datastar/internal/features/profile"
 	"github.com/oexza/go-orisun-datastar/internal/views"
 )
 
@@ -37,7 +38,11 @@ func (s Server) settings(w http.ResponseWriter, r *http.Request) {
 func (s Server) updateBio(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	user := currentUser(r)
-	err := s.Profile.UpdateBioWithMetadata(r.Context(), user, r.FormValue("bio"), eventstore.HTTPCommandMetadata(r, user.UserRegisteredID))
+	err := profile.UpdateProfileBioCommandHandler(r.Context(), profile.UpdateProfileBioCommand{
+		User:     user,
+		Bio:      r.FormValue("bio"),
+		Metadata: eventstore.HTTPCommandMetadata(r, user.UserRegisteredID),
+	}, s.EventSaver)
 	if err != nil {
 		patchTempl(w, r, views.ProfileEditPanel(user, map[string]string{"bio": err.Error()}), datastar.WithSelectorID("profile-edit-page"))
 		return
@@ -60,7 +65,13 @@ func (s Server) uploadImage(w http.ResponseWriter, r *http.Request, header bool)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if _, err := s.Profile.UploadImageWithMetadata(r.Context(), user, data, contentType, header, eventstore.HTTPCommandMetadata(r, user.UserRegisteredID)); err != nil {
+	if _, err := profile.UploadProfileImageCommandHandler(r.Context(), profile.UploadProfileImageCommand{
+		User:        user,
+		Data:        data,
+		ContentType: contentType,
+		Header:      header,
+		Metadata:    eventstore.HTTPCommandMetadata(r, user.UserRegisteredID),
+	}, s.EventSaver, s.ProfileStorage); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

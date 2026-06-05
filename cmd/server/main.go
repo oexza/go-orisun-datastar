@@ -34,12 +34,11 @@ type runOptions struct {
 
 type appComponents struct {
 	authService      *auth.Service
-	todoService      *todo.Service
-	profileService   *profile.Service
 	todoReadModel    *todo.ReadModel
 	profileReadModel *profile.ReadModel
 	checkpointer     eventstore.Checkpointer
 	emailSender      email.Sender
+	profileStorage   profile.ObjectStore
 }
 
 type eventHandler interface {
@@ -103,7 +102,7 @@ func run(ctx context.Context, stop context.CancelFunc, cfg config.Config, opts r
 	defer bus.Close()
 
 	viewStore := newViewStore(bus, logger)
-	components := newAppComponents(db, orisunStore, bus, cfg, logger)
+	components := newAppComponents(db, orisunStore, cfg, logger)
 	handlers, err := startEventHandlers(ctx, eventHandlerFactories(orisunStore, bus, cfg, components, logger))
 	if err != nil {
 		return err
@@ -111,12 +110,14 @@ func run(ctx context.Context, stop context.CancelFunc, cfg config.Config, opts r
 	defer stopEventHandlers(handlers)
 
 	app := httpui.Server{
-		Auth:        components.authService,
-		Todos:       components.todoService,
-		Profile:     components.profileService,
-		Subscriber:  bus,
-		ViewStore:   viewStore,
-		Development: cfg.DevelopmentCookie,
+		Auth:           components.authService,
+		Todos:          components.todoReadModel,
+		EventSaver:     orisunStore,
+		EventRetriever: orisunStore,
+		ProfileStorage: components.profileStorage,
+		Subscriber:     bus,
+		ViewStore:      viewStore,
+		Development:    cfg.DevelopmentCookie,
 	}
 	return serveHTTP(ctx, stop, cfg.Port, app.Routes(), logger)
 }
@@ -152,19 +153,19 @@ func newViewStore(bus *natsbus.Bus, logger *slog.Logger) viewstore.Store {
 	return store
 }
 
-func newAppComponents(db *pgxpool.Pool, store *eventstore.EmbeddedOrisun, bus *natsbus.Bus, cfg config.Config, logger *slog.Logger) appComponents {
+func newAppComponents(db *pgxpool.Pool, store *eventstore.EmbeddedOrisun, cfg config.Config, logger *slog.Logger) appComponents {
 	authService := auth.NewService(db, store, store, !cfg.DevelopmentCookie)
 	todoReadModel := todo.NewReadModel(db)
 	profileReadModel := profile.NewReadModel(db)
+	profileStorage := storage.NewLocalProvider(cfg.UploadDir, cfg.UploadBaseURL)
 
 	return appComponents{
 		authService:      authService,
-		todoService:      todo.NewService(todoReadModel, store, store, bus),
-		profileService:   profile.NewService(store, storage.NewLocalProvider(cfg.UploadDir, cfg.UploadBaseURL)),
 		todoReadModel:    todoReadModel,
 		profileReadModel: profileReadModel,
 		checkpointer:     eventstore.NewPostgresCheckpointer(db),
 		emailSender:      email.LogSender{Logger: logger},
+		profileStorage:   profileStorage,
 	}
 }
 

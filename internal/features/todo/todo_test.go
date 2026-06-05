@@ -47,16 +47,19 @@ func TestBulkTodoActionsAppendExpectedEvents(t *testing.T) {
 		NewTodoCreatedEvent("done-1", "user-1", "Done one", time.Now(), nil),
 		NewTodoCompletedEvent("done-1-completed", "done-1", "user-1", time.Now(), nil),
 	)
-	service := NewService(readModel, store, store, nil)
 
-	if err := service.CompleteAllActive(context.Background(), "user-1"); err != nil {
+	if err := CompleteAllActiveTodosCommandHandler(context.Background(), CompleteAllActiveTodosCommand{
+		UserRegisteredID: "user-1",
+	}, readModel, store, store); err != nil {
 		t.Fatalf("complete active todos: %v", err)
 	}
 	if got := store.countSaved(TodoCompleted); got != 2 {
 		t.Fatalf("expected two completed events, got %d", got)
 	}
 
-	if err := service.ClearCompleted(context.Background(), "user-1"); err != nil {
+	if err := ClearCompletedTodosCommandHandler(context.Background(), ClearCompletedTodosCommand{
+		UserRegisteredID: "user-1",
+	}, readModel, store, store); err != nil {
 		t.Fatalf("clear completed todos: %v", err)
 	}
 	if got := store.countSaved(TodoDeleted); got != 1 {
