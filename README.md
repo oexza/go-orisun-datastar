@@ -14,6 +14,7 @@ This repository keeps database-backed variants on separate branches:
 ```bash
 task migrate
 task seed
+task sqlc
 task dev
 task test
 task build
@@ -32,6 +33,7 @@ Copy the root `.env.example` values into your shell or a local env loader. The G
 ## Notes
 
 - HTTP uses `github.com/go-chi/chi/v5`.
+- The `postgres` branch generates pgx-backed database code with sqlc; SQL lives in `queries/` and generated code lives in `internal/dbsql/`.
 - Views are authored as `.templ` components and generated with `go tool templ generate`.
 - Static assets are served through `internal/resources` and referenced from templ with `resources.StaticPath`.
 - Authentication is Go-native and stores password/session data in PostgreSQL tables compatible with the starter schema shape.

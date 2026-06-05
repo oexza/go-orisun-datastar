@@ -1,8 +1,8 @@
 CREATE TABLE IF NOT EXISTS projector_checkpoint (
     id TEXT PRIMARY KEY,
     name TEXT UNIQUE NOT NULL,
-    commit_position NUMERIC(20, 0) NOT NULL,
-    prepare_position NUMERIC(20, 0) NOT NULL,
+    commit_position BIGINT NOT NULL,
+    prepare_position BIGINT NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -78,8 +78,8 @@ CREATE TABLE IF NOT EXISTS profile_stats (
     image TEXT,
     bio TEXT,
     header_image_url TEXT,
-    last_event_commit_position NUMERIC(20, 0) NOT NULL,
-    last_event_prepare_position NUMERIC(20, 0) NOT NULL,
+    last_event_commit_position BIGINT NOT NULL,
+    last_event_prepare_position BIGINT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -94,8 +94,8 @@ CREATE TABLE IF NOT EXISTS todo_items (
     completed BOOLEAN NOT NULL DEFAULT false,
     completed_at TIMESTAMPTZ,
     deleted_at TIMESTAMPTZ,
-    last_event_commit_position NUMERIC(20, 0) NOT NULL,
-    last_event_prepare_position NUMERIC(20, 0) NOT NULL,
+    last_event_commit_position BIGINT NOT NULL,
+    last_event_prepare_position BIGINT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

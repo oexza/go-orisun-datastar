@@ -12,9 +12,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/example/hono-event-starter-go/internal/dbsql"
 	"github.com/example/hono-event-starter-go/internal/eventstore"
 	"github.com/example/hono-event-starter-go/internal/views"
 )
@@ -33,6 +35,7 @@ const (
 
 type Service struct {
 	db            *pgxpool.Pool
+	queries       *dbsql.Queries
 	store         eventstore.Saver
 	retriever     eventstore.Retriever
 	secureCookie  bool
@@ -42,6 +45,7 @@ type Service struct {
 func NewService(db *pgxpool.Pool, saver eventstore.Saver, retriever eventstore.Retriever, secureCookie bool) *Service {
 	return &Service{
 		db:            db,
+		queries:       dbsql.New(db),
 		store:         saver,
 		retriever:     retriever,
 		secureCookie:  secureCookie,
@@ -102,18 +106,31 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (views.User
 	}
 
 	name := strings.TrimSpace(input.FirstName + " " + input.LastName)
-	_, err = s.db.Exec(ctx, `
-		INSERT INTO auth_user (id, name, email, email_verified, username, display_username, user_registered_id)
-		VALUES ($1, $2, $3, false, $4, $4, $5)
-	`, userID, name, input.Email, input.Username, userRegisteredID)
+	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return views.User{}, err
 	}
-	_, err = s.db.Exec(ctx, `
-		INSERT INTO auth_account (id, account_id, provider_id, user_id, password)
-		VALUES ($1, $2, 'credential', $3, $4)
-	`, uuid.NewString(), input.Email, userID, string(hash))
-	if err != nil {
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	qtx := s.queries.WithTx(tx)
+	if err := qtx.CreateAuthUser(ctx, dbsql.CreateAuthUserParams{
+		ID:               userID,
+		Name:             name,
+		Email:            input.Email,
+		Username:         stringPtr(input.Username),
+		UserRegisteredID: userRegisteredID,
+	}); err != nil {
+		return views.User{}, err
+	}
+	if err := qtx.CreateAuthAccount(ctx, dbsql.CreateAuthAccountParams{
+		ID:        uuid.NewString(),
+		AccountID: input.Email,
+		UserID:    userID,
+		Password:  stringPtr(string(hash)),
+	}); err != nil {
+		return views.User{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return views.User{}, err
 	}
 
@@ -133,16 +150,17 @@ func (s *Service) Login(ctx context.Context, emailAddress, password string) (vie
 	if err != nil {
 		return views.User{}, "", err
 	}
-	_, err = s.db.Exec(ctx, `
-		INSERT INTO auth_session (id, token, user_id, expires_at)
-		VALUES ($1, $2, $3, $4)
-	`, uuid.NewString(), token, user.ID, time.Now().Add(90*24*time.Hour))
+	err = s.queries.CreateAuthSession(ctx, dbsql.CreateAuthSessionParams{
+		ID:        uuid.NewString(),
+		Token:     token,
+		UserID:    user.ID,
+		ExpiresAt: pgTime(time.Now().Add(90 * 24 * time.Hour)),
+	})
 	return user, token, err
 }
 
 func (s *Service) Logout(ctx context.Context, token string) error {
-	_, err := s.db.Exec(ctx, `DELETE FROM auth_session WHERE token = $1`, token)
-	return err
+	return s.queries.DeleteAuthSessionByToken(ctx, token)
 }
 
 func (s *Service) CurrentUser(ctx context.Context, r *http.Request) (views.User, bool, error) {
@@ -161,31 +179,27 @@ func (s *Service) CurrentUser(ctx context.Context, r *http.Request) (views.User,
 }
 
 func (s *Service) UserBySessionToken(ctx context.Context, token string) (views.User, error) {
-	return scanUser(s.db.QueryRow(ctx, `
-		SELECT u.id, u.user_registered_id, u.name, coalesce(u.username, ''), u.email, u.email_verified, coalesce(u.image, ''), coalesce(p.bio, ''), coalesce(p.header_image_url, '')
-		FROM auth_session s
-		JOIN auth_user u ON u.id = s.user_id
-		LEFT JOIN profile_stats p ON p.user_id = u.user_registered_id
-		WHERE s.token = $1 AND s.expires_at > now()
-	`, token))
+	row, err := s.queries.UserBySessionToken(ctx, token)
+	if err != nil {
+		return views.User{}, err
+	}
+	return userFromSessionRow(row), nil
 }
 
 func (s *Service) UserByRegisteredID(ctx context.Context, userRegisteredID string) (views.User, error) {
-	return scanUser(s.db.QueryRow(ctx, `
-		SELECT u.id, u.user_registered_id, u.name, coalesce(u.username, ''), u.email, u.email_verified, coalesce(u.image, ''), coalesce(p.bio, ''), coalesce(p.header_image_url, '')
-		FROM auth_user u
-		LEFT JOIN profile_stats p ON p.user_id = u.user_registered_id
-		WHERE u.user_registered_id = $1
-	`, userRegisteredID))
+	row, err := s.queries.UserByRegisteredID(ctx, userRegisteredID)
+	if err != nil {
+		return views.User{}, err
+	}
+	return userFromRegisteredRow(row), nil
 }
 
 func (s *Service) UserByIDOrRegisteredID(ctx context.Context, id string) (views.User, error) {
-	return scanUser(s.db.QueryRow(ctx, `
-		SELECT u.id, u.user_registered_id, u.name, coalesce(u.username, ''), u.email, u.email_verified, coalesce(u.image, ''), coalesce(p.bio, ''), coalesce(p.header_image_url, '')
-		FROM auth_user u
-		LEFT JOIN profile_stats p ON p.user_id = u.user_registered_id
-		WHERE u.id = $1 OR u.user_registered_id = $1
-	`, id))
+	row, err := s.queries.UserByIDOrRegisteredID(ctx, id)
+	if err != nil {
+		return views.User{}, err
+	}
+	return userFromIDOrRegisteredRow(row), nil
 }
 
 func (s *Service) GenerateEmailVerificationOTP(ctx context.Context, user views.User) error {
@@ -226,11 +240,12 @@ func (s *Service) generateEmailVerificationOTP(ctx context.Context, user views.U
 		},
 		Metadata: metadataWithQuery(metadata, query),
 	}
-	_, err = s.db.Exec(ctx, `
-		INSERT INTO auth_verification (id, identifier, value, expires_at)
-		VALUES ($1, $2, $3, $4)
-	`, otpID, "email:"+user.UserRegisteredID, code, expiresAt)
-	if err != nil {
+	if err := s.queries.CreateAuthVerification(ctx, dbsql.CreateAuthVerificationParams{
+		ID:         otpID,
+		Identifier: "email:" + user.UserRegisteredID,
+		Value:      code,
+		ExpiresAt:  pgTime(expiresAt),
+	}); err != nil {
 		return err
 	}
 	if _, err := s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, query); err != nil {
@@ -240,13 +255,14 @@ func (s *Service) generateEmailVerificationOTP(ctx context.Context, user views.U
 }
 
 func (s *Service) UpdateImage(ctx context.Context, userRegisteredID, imageURL string) error {
-	_, err := s.db.Exec(ctx, `UPDATE auth_user SET image = $1, updated_at = now() WHERE user_registered_id = $2`, imageURL, userRegisteredID)
-	return err
+	return s.queries.UpdateAuthUserImage(ctx, dbsql.UpdateAuthUserImageParams{
+		Image:            stringPtr(imageURL),
+		UserRegisteredID: userRegisteredID,
+	})
 }
 
 func (s *Service) MarkEmailVerified(ctx context.Context, userRegisteredID string) error {
-	_, err := s.db.Exec(ctx, `UPDATE auth_user SET email_verified = true, updated_at = now() WHERE user_registered_id = $1`, userRegisteredID)
-	return err
+	return s.queries.MarkAuthUserEmailVerified(ctx, userRegisteredID)
 }
 
 func (s *Service) ValidateOTP(ctx context.Context, userID, code string) error {
@@ -324,11 +340,12 @@ func (s *Service) RequestPasswordReset(ctx context.Context, emailAddress string)
 			"scope":                    map[string]any{"userRegisteredId": user.UserRegisteredID},
 		},
 	}
-	_, err = s.db.Exec(ctx, `
-		INSERT INTO auth_verification (id, identifier, value, expires_at)
-		VALUES ($1, $2, $3, $4)
-	`, requestID, "password-reset:"+user.ID, token, expiresAt)
-	if err != nil {
+	if err := s.queries.CreateAuthVerification(ctx, dbsql.CreateAuthVerificationParams{
+		ID:         requestID,
+		Identifier: "password-reset:" + user.ID,
+		Value:      token,
+		ExpiresAt:  pgTime(expiresAt),
+	}); err != nil {
 		return err
 	}
 	if _, err := s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, passwordResetRequestedQuery(requestID)); err != nil {
@@ -341,20 +358,15 @@ func (s *Service) ResetPassword(ctx context.Context, token, password string) err
 	if len(password) < 6 {
 		return errors.New("password must be at least 6 characters")
 	}
-	var requestID, identifier string
-	err := s.db.QueryRow(ctx, `
-		SELECT id, identifier FROM auth_verification
-		WHERE identifier LIKE 'password-reset:%' AND value = $1 AND expires_at > now()
-		ORDER BY created_at DESC LIMIT 1
-	`, token).Scan(&requestID, &identifier)
+	verification, err := s.queries.PasswordResetVerificationByToken(ctx, token)
 	if err != nil {
 		return errors.New("invalid or expired reset token")
 	}
-	userID := strings.TrimPrefix(identifier, "password-reset:")
+	userID := strings.TrimPrefix(verification.Identifier, "password-reset:")
 	if err := s.setPassword(ctx, userID, password); err != nil {
 		return err
 	}
-	event := eventstore.DomainEvent{EventID: uuid.NewString(), EventType: PasswordResetCompleted, Data: map[string]any{"passwordResetCompletedId": uuid.NewString(), "completedAt": time.Now().Format(time.RFC3339), "scope": map[string]any{"passwordResetRequestedId": requestID}}}
+	event := eventstore.DomainEvent{EventID: uuid.NewString(), EventType: PasswordResetCompleted, Data: map[string]any{"passwordResetCompletedId": uuid.NewString(), "completedAt": time.Now().Format(time.RFC3339), "scope": map[string]any{"passwordResetRequestedId": verification.ID}}}
 	_, err = s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, eventstore.Query{})
 	return err
 }
@@ -440,8 +452,7 @@ func (s *Service) UpdateName(ctx context.Context, user views.User, name string) 
 	if _, err := s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, eventstore.Query{}); err != nil {
 		return err
 	}
-	_, err := s.db.Exec(ctx, `UPDATE auth_user SET name = $1, updated_at = now() WHERE id = $2`, name, user.ID)
-	return err
+	return s.queries.UpdateAuthUserName(ctx, dbsql.UpdateAuthUserNameParams{Name: name, ID: user.ID})
 }
 
 func (s *Service) SetSessionCookie(w http.ResponseWriter, token string) {
@@ -464,27 +475,81 @@ func (s *Service) setPassword(ctx context.Context, userID, password string) erro
 	if err != nil {
 		return err
 	}
-	_, err = s.db.Exec(ctx, `UPDATE auth_account SET password = $1, updated_at = now() WHERE user_id = $2 AND provider_id = 'credential'`, string(hash), userID)
-	return err
+	return s.queries.UpdateAuthAccountPassword(ctx, dbsql.UpdateAuthAccountPasswordParams{
+		Password: stringPtr(string(hash)),
+		UserID:   userID,
+	})
 }
 
 func (s *Service) userByEmailWithPassword(ctx context.Context, emailAddress string) (views.User, string, error) {
-	var user views.User
-	var hash string
-	err := s.db.QueryRow(ctx, `
-		SELECT u.id, u.user_registered_id, u.name, coalesce(u.username, ''), u.email, u.email_verified, coalesce(u.image, ''), coalesce(p.bio, ''), coalesce(p.header_image_url, ''), a.password
-		FROM auth_user u
-		JOIN auth_account a ON a.user_id = u.id AND a.provider_id = 'credential'
-		LEFT JOIN profile_stats p ON p.user_id = u.user_registered_id
-		WHERE u.email = $1
-	`, emailAddress).Scan(&user.ID, &user.UserRegisteredID, &user.Name, &user.Username, &user.Email, &user.EmailVerified, &user.Image, &user.Bio, &user.HeaderImageURL, &hash)
-	return user, hash, err
+	row, err := s.queries.UserByEmailWithPassword(ctx, emailAddress)
+	if err != nil {
+		return views.User{}, "", err
+	}
+	if row.Password == nil {
+		return views.User{}, "", pgx.ErrNoRows
+	}
+	return views.User{
+		ID:               row.ID,
+		UserRegisteredID: row.UserRegisteredID,
+		Name:             row.Name,
+		Username:         row.Username,
+		Email:            row.Email,
+		EmailVerified:    row.EmailVerified,
+		Image:            row.Image,
+		Bio:              row.Bio,
+		HeaderImageURL:   row.HeaderImageUrl,
+	}, *row.Password, nil
 }
 
-func scanUser(row pgx.Row) (views.User, error) {
-	var user views.User
-	err := row.Scan(&user.ID, &user.UserRegisteredID, &user.Name, &user.Username, &user.Email, &user.EmailVerified, &user.Image, &user.Bio, &user.HeaderImageURL)
-	return user, err
+func userFromSessionRow(row dbsql.UserBySessionTokenRow) views.User {
+	return views.User{
+		ID:               row.ID,
+		UserRegisteredID: row.UserRegisteredID,
+		Name:             row.Name,
+		Username:         row.Username,
+		Email:            row.Email,
+		EmailVerified:    row.EmailVerified,
+		Image:            row.Image,
+		Bio:              row.Bio,
+		HeaderImageURL:   row.HeaderImageUrl,
+	}
+}
+
+func userFromRegisteredRow(row dbsql.UserByRegisteredIDRow) views.User {
+	return views.User{
+		ID:               row.ID,
+		UserRegisteredID: row.UserRegisteredID,
+		Name:             row.Name,
+		Username:         row.Username,
+		Email:            row.Email,
+		EmailVerified:    row.EmailVerified,
+		Image:            row.Image,
+		Bio:              row.Bio,
+		HeaderImageURL:   row.HeaderImageUrl,
+	}
+}
+
+func userFromIDOrRegisteredRow(row dbsql.UserByIDOrRegisteredIDRow) views.User {
+	return views.User{
+		ID:               row.ID,
+		UserRegisteredID: row.UserRegisteredID,
+		Name:             row.Name,
+		Username:         row.Username,
+		Email:            row.Email,
+		EmailVerified:    row.EmailVerified,
+		Image:            row.Image,
+		Bio:              row.Bio,
+		HeaderImageURL:   row.HeaderImageUrl,
+	}
+}
+
+func pgTime(value time.Time) pgtype.Timestamptz {
+	return pgtype.Timestamptz{Time: value, Valid: true}
+}
+
+func stringPtr(value string) *string {
+	return &value
 }
 
 func randomToken(size int) (string, error) {

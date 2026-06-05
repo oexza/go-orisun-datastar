@@ -1,0 +1,46 @@
+-- name: UpsertRegisteredProfileUser :exec
+INSERT INTO profile_stats (user_id, name, username, email, last_event_commit_position, last_event_prepare_position)
+VALUES (@user_id, @name, @username, @email, @last_event_commit_position, @last_event_prepare_position)
+ON CONFLICT (user_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    username = EXCLUDED.username,
+    email = EXCLUDED.email,
+    last_event_commit_position = EXCLUDED.last_event_commit_position,
+    last_event_prepare_position = EXCLUDED.last_event_prepare_position,
+    updated_at = now();
+
+-- name: UpsertProfileName :exec
+INSERT INTO profile_stats (user_id, name, last_event_commit_position, last_event_prepare_position)
+VALUES (@user_id, @name, @last_event_commit_position, @last_event_prepare_position)
+ON CONFLICT (user_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    last_event_commit_position = EXCLUDED.last_event_commit_position,
+    last_event_prepare_position = EXCLUDED.last_event_prepare_position,
+    updated_at = now();
+
+-- name: UpsertProfileBio :exec
+INSERT INTO profile_stats (user_id, bio, last_event_commit_position, last_event_prepare_position)
+VALUES (@user_id, @bio, @last_event_commit_position, @last_event_prepare_position)
+ON CONFLICT (user_id) DO UPDATE SET
+    bio = EXCLUDED.bio,
+    last_event_commit_position = EXCLUDED.last_event_commit_position,
+    last_event_prepare_position = EXCLUDED.last_event_prepare_position,
+    updated_at = now();
+
+-- name: UpsertProfileImage :exec
+INSERT INTO profile_stats (user_id, image, last_event_commit_position, last_event_prepare_position)
+VALUES (@user_id, @image, @last_event_commit_position, @last_event_prepare_position)
+ON CONFLICT (user_id) DO UPDATE SET
+    image = EXCLUDED.image,
+    last_event_commit_position = EXCLUDED.last_event_commit_position,
+    last_event_prepare_position = EXCLUDED.last_event_prepare_position,
+    updated_at = now();
+
+-- name: UpsertProfileHeaderImage :exec
+INSERT INTO profile_stats (user_id, header_image_url, last_event_commit_position, last_event_prepare_position)
+VALUES (@user_id, @header_image_url, @last_event_commit_position, @last_event_prepare_position)
+ON CONFLICT (user_id) DO UPDATE SET
+    header_image_url = EXCLUDED.header_image_url,
+    last_event_commit_position = EXCLUDED.last_event_commit_position,
+    last_event_prepare_position = EXCLUDED.last_event_prepare_position,
+    updated_at = now();

@@ -12,17 +12,17 @@ tasks:
       - go tool air -c .air.toml
 
   build:
-    deps: [templ, css]
+    deps: [sqlc, templ, css]
     cmds:
       - go build ./cmd/server
 
   test:
-    deps: [templ]
+    deps: [sqlc, templ]
     cmds:
       - go test ./...
 
   vet:
-    deps: [templ]
+    deps: [sqlc, templ]
     cmds:
       - go vet ./...
 
@@ -45,6 +45,16 @@ tasks:
   templ-watch:
     cmds:
       - go tool templ generate -watch
+
+  sqlc:
+    sources:
+      - sqlc.yaml
+      - queries/**/*.sql
+      - migrations/**/*.sql
+    generates:
+      - internal/dbsql/**/*.go
+    cmds:
+      - go tool sqlc generate
 
   css:
     sources:
