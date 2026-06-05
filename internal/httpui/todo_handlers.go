@@ -77,10 +77,10 @@ func (s Server) createTodo(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 	_, err := s.Todos.CreateWithMetadata(r.Context(), user.UserRegisteredID, r.FormValue("title"), eventstore.HTTPCommandMetadata(r, user.UserRegisteredID))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeSSE(w, r, func(sse *datastar.ServerSentEventGenerator) error { return flashError(sse, err.Error()) })
 		return
 	}
-	writeSSE(w, r, func(sse *datastar.ServerSentEventGenerator) error { return clearInput(sse, "todo-title") })
+	writeSSE(w, r, func(sse *datastar.ServerSentEventGenerator) error { return clearNewTodoTitle(sse) })
 }
 
 func (s Server) renameTodo(w http.ResponseWriter, r *http.Request) {

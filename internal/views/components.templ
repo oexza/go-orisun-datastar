@@ -19,6 +19,11 @@ templ Base(title string) {
 			if isDevelopment() {
 				<div data-init={ hotReloadSSE() }></div>
 			}
+			<div class="toast toast-top toast-center z-50 hidden" data-class:hidden="!$flashMessage">
+				<div class="alert alert-error shadow-lg">
+					<span data-text="$flashMessage"></span>
+				</div>
+			</div>
 			{ children... }
 		</body>
 	</html>
@@ -57,7 +62,7 @@ templ AppNav(user User, active string) {
 }
 
 templ AuthForm(action string, title string, fields []Field, errors map[string]string) {
-	<main class="auth-layout">
+	<main id="auth-page" class="auth-layout">
 		<section class="auth-card card">
 			<div class="card-body gap-5">
 				<div class="grid gap-2 text-center">

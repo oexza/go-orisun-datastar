@@ -1,13 +1,10 @@
 package httpui
 
 import (
-	"errors"
 	"net/http"
-	"strconv"
 
+	"github.com/a-h/templ"
 	"github.com/starfederation/datastar-go/datastar"
-
-	"github.com/oexza/go-orisun-datastar/internal/eventstore"
 )
 
 func writeSSE(w http.ResponseWriter, r *http.Request, fn func(*datastar.ServerSentEventGenerator) error) {
@@ -16,20 +13,35 @@ func writeSSE(w http.ResponseWriter, r *http.Request, fn func(*datastar.ServerSe
 
 func emptySSE(w http.ResponseWriter, r *http.Request, err error) {
 	if err != nil {
-		status := http.StatusInternalServerError
-		if errors.Is(err, eventstore.ErrNotFound) {
-			status = http.StatusNotFound
-		}
-		http.Error(w, err.Error(), status)
+		writeSSE(w, r, func(sse *datastar.ServerSentEventGenerator) error {
+			return flashError(sse, err.Error())
+		})
 		return
 	}
-	writeSSE(w, r, func(*datastar.ServerSentEventGenerator) error { return nil })
+	writeSSE(w, r, clearFlash)
 }
 
-func clearInput(sse *datastar.ServerSentEventGenerator, id string) error {
-	return sse.ExecuteScript(`{ const el = document.getElementById(` + strconv.Quote(id) + `); if (el) { el.value = ""; el.style.height = "auto"; } }`)
+func clearNewTodoTitle(sse *datastar.ServerSentEventGenerator) error {
+	return sse.MarshalAndPatchSignals(map[string]string{"flashMessage": "", "newTodoTitle": ""})
 }
 
 func alert(sse *datastar.ServerSentEventGenerator, message string) error {
-	return sse.ExecuteScript(`alert(` + strconv.Quote(message) + `)`)
+	return flashError(sse, message)
+}
+
+func flashError(sse *datastar.ServerSentEventGenerator, message string) error {
+	return sse.MarshalAndPatchSignals(map[string]string{"flashMessage": message})
+}
+
+func clearFlash(sse *datastar.ServerSentEventGenerator) error {
+	return sse.MarshalAndPatchSignals(map[string]string{"flashMessage": ""})
+}
+
+func patchTempl(w http.ResponseWriter, r *http.Request, component templ.Component, opts ...datastar.PatchElementOption) {
+	writeSSE(w, r, func(sse *datastar.ServerSentEventGenerator) error {
+		if err := clearFlash(sse); err != nil {
+			return err
+		}
+		return sse.PatchElementTempl(component, opts...)
+	})
 }

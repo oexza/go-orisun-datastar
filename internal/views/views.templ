@@ -2,59 +2,79 @@ package views
 
 templ Login(errors map[string]string) {
 	@Base("Login") {
-		@AuthForm("/login", "Login", []Field{
-			{Name: "email", Type: "email", Label: "Email"},
-			{Name: "password", Type: "password", Label: "Password"},
-		}, errors) {
-			<a href="/register">Create account</a>
-			<a href="/forgot-password">Forgot password?</a>
-		}
+		@LoginForm(errors)
+	}
+}
+
+templ LoginForm(errors map[string]string) {
+	@AuthForm("/login", "Login", []Field{
+		{Name: "email", Type: "email", Label: "Email"},
+		{Name: "password", Type: "password", Label: "Password"},
+	}, errors) {
+		<a href="/register">Create account</a>
+		<a href="/forgot-password">Forgot password?</a>
 	}
 }
 
 templ Register(errors map[string]string) {
 	@Base("Register") {
-		@AuthForm("/register", "Create account", []Field{
-			{Name: "username", Type: "text", Label: "Username"},
-			{Name: "email", Type: "email", Label: "Email"},
-			{Name: "password", Type: "password", Label: "Password"},
-			{Name: "firstName", Type: "text", Label: "First name"},
-			{Name: "lastName", Type: "text", Label: "Last name"},
-			{Name: "yearOfBirth", Type: "number", Label: "Year of birth"},
-		}, errors) {
-			<a href="/login">Sign in</a>
-		}
+		@RegisterForm(errors)
+	}
+}
+
+templ RegisterForm(errors map[string]string) {
+	@AuthForm("/register", "Create account", []Field{
+		{Name: "username", Type: "text", Label: "Username"},
+		{Name: "email", Type: "email", Label: "Email"},
+		{Name: "password", Type: "password", Label: "Password"},
+		{Name: "firstName", Type: "text", Label: "First name"},
+		{Name: "lastName", Type: "text", Label: "Last name"},
+		{Name: "yearOfBirth", Type: "number", Label: "Year of birth"},
+	}, errors) {
+		<a href="/login">Sign in</a>
 	}
 }
 
 templ ForgotPassword(errors map[string]string) {
 	@Base("Forgot password") {
-		@AuthForm("/forgot-password", "Forgot password", []Field{
-			{Name: "email", Type: "email", Label: "Email"},
-		}, errors) {
-			<a href="/login">Back to login</a>
-		}
+		@ForgotPasswordForm(errors)
+	}
+}
+
+templ ForgotPasswordForm(errors map[string]string) {
+	@AuthForm("/forgot-password", "Forgot password", []Field{
+		{Name: "email", Type: "email", Label: "Email"},
+	}, errors) {
+		<a href="/login">Back to login</a>
 	}
 }
 
 templ ResetPassword(token string, errors map[string]string) {
 	@Base("Reset password") {
-		@AuthForm("/reset-password/" + token, "Reset password", []Field{
-			{Name: "password", Type: "password", Label: "New password"},
-		}, errors) {
-		}
+		@ResetPasswordForm(token, errors)
+	}
+}
+
+templ ResetPasswordForm(token string, errors map[string]string) {
+	@AuthForm("/reset-password/" + token, "Reset password", []Field{
+		{Name: "password", Type: "password", Label: "New password"},
+	}, errors) {
 	}
 }
 
 templ ValidateEmail(userID string, errors map[string]string) {
 	@Base("Validate email") {
-		@AuthForm("/register/" + userID + "/validate-email", "Validate email", []Field{
-			{Name: "otp", Type: "text", Label: "Verification code"},
-		}, errors) {
-			<form class="w-full" data-on:submit={ sendValidationOTPSSE(userID) }>
-				<button class="btn btn-outline w-full" type="submit">Send new code</button>
-			</form>
-		}
+		@ValidateEmailForm(userID, errors)
+	}
+}
+
+templ ValidateEmailForm(userID string, errors map[string]string) {
+	@AuthForm("/register/" + userID + "/validate-email", "Validate email", []Field{
+		{Name: "otp", Type: "text", Label: "Verification code"},
+	}, errors) {
+		<form class="w-full" data-on:submit={ sendValidationOTPSSE(userID) }>
+			<button class="btn btn-outline w-full" type="submit">Send new code</button>
+		</form>
 	}
 }
 
@@ -68,7 +88,7 @@ templ TodosPage(user User, todos []Todo) {
 				<p class="page-subtitle">A compact event-sourced workflow powered by Orisun projections and Datastar fragments.</p>
 			</section>
 			<form class="todo-form" data-on:submit={ postFormSSE("/todos") } data-indicator="creatingTodo">
-				<input class="input w-full" id="todo-title" name="title" maxlength="160" required placeholder="Add a todo"/>
+				<input class="input w-full" id="todo-title" name="title" data-bind:new-todo-title maxlength="160" required placeholder="Add a todo"/>
 				<button class="btn btn-primary" type="submit">Add</button>
 				@SseIndicator("creatingTodo")
 			</form>
@@ -147,37 +167,41 @@ templ Profile(user User) {
 
 templ ProfileEdit(user User, errors map[string]string) {
 	@Base("Edit profile") {
-		<main class="page">
-			@AppNav(user, "profile")
-			<section class="page-header">
-				<h1 class="page-title">Edit profile</h1>
-				<p class="page-subtitle">Keep the read model fresh with profile events.</p>
-			</section>
-			<section class="settings-grid">
-				<form class="stack-form card bg-base-100 border border-base-300 p-5" method="post" action="/profile/bio" data-on:submit={ postFormSSE("/profile/bio") }>
-					<h2 class="text-lg font-bold">Bio</h2>
-					if errors != nil && errors["bio"] != "" {
-						<div class="alert alert-error alert-soft">{ errors["bio"] }</div>
-					}
-					<label class="grid gap-2">
-						<span class="font-semibold">Bio</span>
-						<textarea class="textarea min-h-32 w-full" name="bio" maxlength="280">{ user.Bio }</textarea>
-					</label>
-					<button class="btn btn-primary">Save bio</button>
-				</form>
-				<form class="stack-form card bg-base-100 border border-base-300 p-5" method="post" enctype="multipart/form-data" action="/profile/avatar">
-					<h2 class="text-lg font-bold">Avatar</h2>
-					<input class="file-input w-full" type="file" name="file" accept="image/*"/>
-					<button class="btn btn-neutral">Upload avatar</button>
-				</form>
-				<form class="stack-form card bg-base-100 border border-base-300 p-5" method="post" enctype="multipart/form-data" action="/profile/header-image">
-					<h2 class="text-lg font-bold">Header image</h2>
-					<input class="file-input w-full" type="file" name="file" accept="image/*"/>
-					<button class="btn btn-neutral">Upload header</button>
-				</form>
-			</section>
-		</main>
+		@ProfileEditPanel(user, errors)
 	}
+}
+
+templ ProfileEditPanel(user User, errors map[string]string) {
+	<main id="profile-edit-page" class="page">
+		@AppNav(user, "profile")
+		<section class="page-header">
+			<h1 class="page-title">Edit profile</h1>
+			<p class="page-subtitle">Keep the read model fresh with profile events.</p>
+		</section>
+		<section class="settings-grid">
+			<form class="stack-form card bg-base-100 border border-base-300 p-5" method="post" action="/profile/bio" data-on:submit={ postFormSSE("/profile/bio") }>
+				<h2 class="text-lg font-bold">Bio</h2>
+				if errors != nil && errors["bio"] != "" {
+					<div class="alert alert-error alert-soft">{ errors["bio"] }</div>
+				}
+				<label class="grid gap-2">
+					<span class="font-semibold">Bio</span>
+					<textarea class="textarea min-h-32 w-full" name="bio" maxlength="280">{ user.Bio }</textarea>
+				</label>
+				<button class="btn btn-primary">Save bio</button>
+			</form>
+			<form class="stack-form card bg-base-100 border border-base-300 p-5" method="post" enctype="multipart/form-data" action="/profile/avatar">
+				<h2 class="text-lg font-bold">Avatar</h2>
+				<input class="file-input w-full" type="file" name="file" accept="image/*"/>
+				<button class="btn btn-neutral">Upload avatar</button>
+			</form>
+			<form class="stack-form card bg-base-100 border border-base-300 p-5" method="post" enctype="multipart/form-data" action="/profile/header-image">
+				<h2 class="text-lg font-bold">Header image</h2>
+				<input class="file-input w-full" type="file" name="file" accept="image/*"/>
+				<button class="btn btn-neutral">Upload header</button>
+			</form>
+		</section>
+	</main>
 }
 
 templ Settings(user User) {

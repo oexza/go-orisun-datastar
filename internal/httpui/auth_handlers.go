@@ -33,7 +33,7 @@ func (s Server) authRoutes(r chi.Router) {
 
 func (s Server) register(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeSSE(w, r, func(sse *datastar.ServerSentEventGenerator) error { return flashError(sse, err.Error()) })
 		return
 	}
 	year, _ := strconv.Atoi(r.FormValue("yearOfBirth"))
@@ -43,7 +43,7 @@ func (s Server) register(w http.ResponseWriter, r *http.Request) {
 		Metadata: eventstore.HTTPCommandMetadata(r, ""),
 	})
 	if err != nil {
-		_ = views.Register(map[string]string{"error": err.Error()}).Render(r.Context(), w)
+		patchTempl(w, r, views.RegisterForm(map[string]string{"error": err.Error()}), datastar.WithSelectorID("auth-page"))
 		return
 	}
 	writeSSE(w, r, func(sse *datastar.ServerSentEventGenerator) error {
@@ -53,12 +53,12 @@ func (s Server) register(w http.ResponseWriter, r *http.Request) {
 
 func (s Server) login(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeSSE(w, r, func(sse *datastar.ServerSentEventGenerator) error { return flashError(sse, err.Error()) })
 		return
 	}
 	user, token, err := s.Auth.Login(r.Context(), r.FormValue("email"), r.FormValue("password"))
 	if err != nil {
-		_ = views.Login(map[string]string{"error": err.Error()}).Render(r.Context(), w)
+		patchTempl(w, r, views.LoginForm(map[string]string{"error": err.Error()}), datastar.WithSelectorID("auth-page"))
 		return
 	}
 	s.Auth.SetSessionCookie(w, token)
@@ -87,7 +87,7 @@ func (s Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	token := chi.URLParam(r, "token")
 	if err := s.Auth.ResetPasswordWithMetadata(r.Context(), token, r.FormValue("password"), eventstore.HTTPCommandMetadata(r, "")); err != nil {
-		_ = views.ResetPassword(token, map[string]string{"error": err.Error()}).Render(r.Context(), w)
+		patchTempl(w, r, views.ResetPasswordForm(token, map[string]string{"error": err.Error()}), datastar.WithSelectorID("auth-page"))
 		return
 	}
 	writeSSE(w, r, func(sse *datastar.ServerSentEventGenerator) error { return sse.Redirect("/login") })
@@ -97,7 +97,7 @@ func (s Server) validateEmail(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	userID := chi.URLParam(r, "userID")
 	if err := s.Auth.ValidateOTPWithMetadata(r.Context(), userID, r.FormValue("otp"), eventstore.HTTPCommandMetadata(r, "")); err != nil {
-		_ = views.ValidateEmail(userID, map[string]string{"error": err.Error()}).Render(r.Context(), w)
+		patchTempl(w, r, views.ValidateEmailForm(userID, map[string]string{"error": err.Error()}), datastar.WithSelectorID("auth-page"))
 		return
 	}
 	writeSSE(w, r, func(sse *datastar.ServerSentEventGenerator) error { return sse.Redirect("/login") })

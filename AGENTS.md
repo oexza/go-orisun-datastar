@@ -82,7 +82,7 @@ Follow the `frases-backend` command-handler pattern when porting mutations:
 
 Keep command responses and read-model updates separate.
 
-- Mutation handlers should append events and return a small Datastar SSE response: empty acknowledgement, redirect, alert, signal patch, or a focused script.
+- Mutation handlers should append events and return a small Datastar SSE response: empty acknowledgement, redirect, server-rendered fragment patch, or a focused signal patch.
 - Mutation handlers should not render large fresh read-model state directly as the primary success path.
 - Long-lived read streams subscribe to NATS/read-model notifications, reload the read model, render a server fragment, and patch it with Datastar.
 - Long-lived SSE handlers should follow the Northstar loop shape: create one Datastar SSE stream, bridge watcher/subscription callbacks into a buffered channel, and perform all SSE writes from the handler's own `select` loop. Do not write to the same SSE response from subscription callback goroutines.
@@ -118,9 +118,10 @@ The backend owns UI state. Prefer server-rendered HTML fragments sent over SSE.
 Priority order:
 
 1. Server-rendered morphs via the SDK's `PatchElementTempl` / `PatchElements` helpers.
-2. Small scripts via the SDK's `ExecuteScript`, `Redirect`, or focused route-local helpers.
-3. Datastar signals only for local interaction state or form-bound data sent to the backend.
-4. Vanilla JavaScript only when morphs and signals are insufficient.
+2. Backend redirects via the SDK's `Redirect` helper for page navigation after commands.
+3. Datastar signals for local interaction state, form-bound data, and small server-patched UI messages.
+4. Focused scripts via the SDK's `ExecuteScript` only when morphs, redirects, and signals are insufficient.
+5. Vanilla JavaScript only for isolated behavior that cannot be expressed through Datastar attributes or SSE events.
 
 Guidelines:
 
@@ -128,6 +129,7 @@ Guidelines:
 - Use `data-indicator` for loading states.
 - Do not use optimistic UI unless the server confirms the state.
 - Morph targets need stable IDs.
+- Datastar-triggered routes should return `text/event-stream` responses through the Go SDK, including validation and error paths.
 - Keep NATS payloads small; use payloads as invalidation/notification, then reload read models server-side.
 - Use the official Datastar Go SDK for SSE event formatting; do not hand-write SSE protocol lines in handlers.
 
