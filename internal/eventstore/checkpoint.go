@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 
-	"github.com/example/go-orisun-datastar/internal/dbsql"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/oexza/go-orisun-datastar/internal/dbsql"
 )
 
 type PostgresCheckpointer struct {

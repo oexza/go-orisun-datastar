@@ -7,8 +7,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/example/go-orisun-datastar/internal/dbsql"
-	"github.com/example/go-orisun-datastar/internal/views"
+	"github.com/oexza/go-orisun-datastar/internal/dbsql"
+	"github.com/oexza/go-orisun-datastar/internal/views"
 )
 
 type ReadModel struct {

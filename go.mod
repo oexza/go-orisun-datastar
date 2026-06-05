@@ -1,4 +1,4 @@
-module github.com/example/go-orisun-datastar
+module github.com/oexza/go-orisun-datastar
 
 go 1.26.3
 

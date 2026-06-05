@@ -10,12 +10,12 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"github.com/example/go-orisun-datastar/internal/auth"
-	"github.com/example/go-orisun-datastar/internal/eventstore"
-	"github.com/example/go-orisun-datastar/internal/features/profile"
-	"github.com/example/go-orisun-datastar/internal/features/todo"
-	"github.com/example/go-orisun-datastar/internal/resources"
-	"github.com/example/go-orisun-datastar/internal/views"
+	"github.com/oexza/go-orisun-datastar/internal/auth"
+	"github.com/oexza/go-orisun-datastar/internal/eventstore"
+	"github.com/oexza/go-orisun-datastar/internal/features/profile"
+	"github.com/oexza/go-orisun-datastar/internal/features/todo"
+	"github.com/oexza/go-orisun-datastar/internal/resources"
+	"github.com/oexza/go-orisun-datastar/internal/views"
 )
 
 type contextKey string

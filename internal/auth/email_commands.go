@@ -8,8 +8,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/example/go-orisun-datastar/internal/email"
-	"github.com/example/go-orisun-datastar/internal/eventstore"
+	"github.com/oexza/go-orisun-datastar/internal/email"
+	"github.com/oexza/go-orisun-datastar/internal/eventstore"
 )
 
 type CommandMetadata = eventstore.CommandMetadata

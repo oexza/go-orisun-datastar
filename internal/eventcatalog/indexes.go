@@ -1,10 +1,10 @@
 package eventcatalog
 
 import (
-	"github.com/example/go-orisun-datastar/internal/auth"
-	"github.com/example/go-orisun-datastar/internal/eventstore"
-	"github.com/example/go-orisun-datastar/internal/features/profile"
-	"github.com/example/go-orisun-datastar/internal/features/todo"
+	"github.com/oexza/go-orisun-datastar/internal/auth"
+	"github.com/oexza/go-orisun-datastar/internal/eventstore"
+	"github.com/oexza/go-orisun-datastar/internal/features/profile"
+	"github.com/oexza/go-orisun-datastar/internal/features/todo"
 )
 
 func BoundaryIndexes() []eventstore.BoundaryIndexDefinition {
