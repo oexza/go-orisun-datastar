@@ -1,4 +1,4 @@
-module github.com/example/hono-event-starter-go
+module github.com/example/go-orisun-datastar
 
 go 1.26.3
 

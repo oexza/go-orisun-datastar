@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/example/hono-event-starter-go/internal/appdb"
-	"github.com/example/hono-event-starter-go/internal/dbsql"
-	"github.com/example/hono-event-starter-go/internal/views"
+	"github.com/example/go-orisun-datastar/internal/appdb"
+	"github.com/example/go-orisun-datastar/internal/dbsql"
+	"github.com/example/go-orisun-datastar/internal/views"
 	"zombiezen.com/go/sqlite"
 )
 

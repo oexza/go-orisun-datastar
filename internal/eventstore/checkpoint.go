@@ -3,8 +3,8 @@ package eventstore
 import (
 	"context"
 
-	"github.com/example/hono-event-starter-go/internal/appdb"
-	"github.com/example/hono-event-starter-go/internal/dbsql"
+	"github.com/example/go-orisun-datastar/internal/appdb"
+	"github.com/example/go-orisun-datastar/internal/dbsql"
 	"github.com/google/uuid"
 	"zombiezen.com/go/sqlite"
 )

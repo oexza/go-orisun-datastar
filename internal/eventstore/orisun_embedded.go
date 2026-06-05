@@ -32,7 +32,7 @@ func StartEmbeddedOrisun(ctx context.Context, cfg EmbeddedConfig) (*EmbeddedOris
 		return nil, err
 	}
 	if cfg.Boundary == "" {
-		cfg.Boundary = "hono_event_starter"
+		cfg.Boundary = "go_orisun_datastar"
 	}
 	if cfg.SQLiteDir == "" {
 		cfg.SQLiteDir = "data/orisun"

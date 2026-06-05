@@ -4,8 +4,8 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/example/hono-event-starter-go/internal/email"
-	"github.com/example/hono-event-starter-go/internal/eventstore"
+	"github.com/example/go-orisun-datastar/internal/email"
+	"github.com/example/go-orisun-datastar/internal/eventstore"
 )
 
 const (

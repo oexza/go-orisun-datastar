@@ -1,6 +1,6 @@
 # Agent Guide
 
-This repository is the Go/chi/templ port of the event-sourced Hono starters. Treat the sibling `../frases-backend` project as the richer reference implementation for architecture, UX patterns, feature boundaries, Datastar flows, CQRS-style SSE, NATS KV view-state, and visual direction. Use `../hono-event-starter` only as the smaller starter reference.
+This repository is Go-Orisun-Datastar, a Go/chi/templ starter for event-sourced Datastar applications. Treat the sibling `../frases-backend` project as the richer reference implementation for architecture, UX patterns, feature boundaries, Datastar flows, CQRS-style SSE, NATS KV view-state, and visual direction.
 
 The app uses server-rendered templ components, Datastar SSE, SQLite read models, embedded Orisun SQLite events, NATS notifications, logged email, and local filesystem upload storage.
 
@@ -33,7 +33,7 @@ The sibling `../frases-backend` is the canonical implementation for expansive pa
 
 Translate, do not blindly copy:
 
-- Hono routes become chi handlers in `internal/httpui`; keep route registration split by feature file rather than growing `router.go`.
+- HTTP route ideas become chi handlers in `internal/httpui`; keep route registration split by feature file rather than growing `router.go`.
 - JSX render helpers become real `.templ` components in `internal/views`; shared layout/navigation/indicator components belong in `components.templ`, and generated `*_templ.go` files are build artifacts from `task templ`.
 - TypeScript command classes and handlers become Go command structs plus handler functions with narrow ports.
 - Frases command metadata becomes `eventstore.CommandMetadata`; HTTP mutation routes should attach `eventstore.HTTPCommandMetadata` when invoking command handlers/services.
@@ -109,7 +109,7 @@ The full KV view-state flow is:
 
 Keep KV payloads small. Do not store generated images, uploaded file bytes, or other large blobs in NATS KV. Durable media belongs in object storage/domain events; large transient media should be streamed directly to the requesting action response as a targeted signal patch.
 
-Current Go-port status: todo SSE now uses `internal/viewstore` for the Frases-style view-state path. Projection notifications trigger a read-model reload into ViewStore, and the SSE route patches only from the ViewStore watcher. Other features should follow this pattern as they are ported.
+Current implementation status: todo SSE now uses `internal/viewstore` for the Frases-style view-state path. Projection notifications trigger a read-model reload into ViewStore, and the SSE route patches only from the ViewStore watcher. Other features should follow this pattern as they adopt view-state streaming.
 
 ## Datastar and UI
 

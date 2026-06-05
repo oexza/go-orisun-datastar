@@ -3,7 +3,7 @@ package auth
 import (
 	"time"
 
-	"github.com/example/hono-event-starter-go/internal/eventstore"
+	"github.com/example/go-orisun-datastar/internal/eventstore"
 )
 
 const (

@@ -13,10 +13,10 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/example/hono-event-starter-go/internal/appdb"
-	"github.com/example/hono-event-starter-go/internal/dbsql"
-	"github.com/example/hono-event-starter-go/internal/eventstore"
-	"github.com/example/hono-event-starter-go/internal/views"
+	"github.com/example/go-orisun-datastar/internal/appdb"
+	"github.com/example/go-orisun-datastar/internal/dbsql"
+	"github.com/example/go-orisun-datastar/internal/eventstore"
+	"github.com/example/go-orisun-datastar/internal/views"
 	"zombiezen.com/go/sqlite"
 )
 

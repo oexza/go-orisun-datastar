@@ -1,10 +1,10 @@
 package eventcatalog
 
 import (
-	"github.com/example/hono-event-starter-go/internal/auth"
-	"github.com/example/hono-event-starter-go/internal/eventstore"
-	"github.com/example/hono-event-starter-go/internal/features/profile"
-	"github.com/example/hono-event-starter-go/internal/features/todo"
+	"github.com/example/go-orisun-datastar/internal/auth"
+	"github.com/example/go-orisun-datastar/internal/eventstore"
+	"github.com/example/go-orisun-datastar/internal/features/profile"
+	"github.com/example/go-orisun-datastar/internal/features/todo"
 )
 
 func BoundaryIndexes() []eventstore.BoundaryIndexDefinition {

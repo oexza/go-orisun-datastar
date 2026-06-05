@@ -27,7 +27,7 @@ func Load() Config {
 		SQLitePath:        env("SQLITE_PATH", "data/app.sqlite"),
 		OrisunSQLiteDir:   env("ORISUN_SQLITE_DIR", "data/orisun"),
 		NATSURL:           env("NATS_URL", "nats://localhost:4224"),
-		OrisunBoundary:    env("ORISUN_GENERAL_BOUNDARY", "hono_event_starter"),
+		OrisunBoundary:    env("ORISUN_GENERAL_BOUNDARY", "go_orisun_datastar"),
 		SessionSecret:     env("BETTER_AUTH_SECRET", "secret-key-that-should-be-very-secret"),
 		UploadDir:         env("UPLOAD_DIR", "static/uploads"),
 		UploadBaseURL:     env("UPLOAD_BASE_URL", "/static/uploads"),

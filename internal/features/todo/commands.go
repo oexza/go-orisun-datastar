@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/example/hono-event-starter-go/internal/eventstore"
+	"github.com/example/go-orisun-datastar/internal/eventstore"
 )
 
 type CommandMetadata = eventstore.CommandMetadata

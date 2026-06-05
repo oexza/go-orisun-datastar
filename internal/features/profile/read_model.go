@@ -5,9 +5,9 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/example/hono-event-starter-go/internal/appdb"
-	"github.com/example/hono-event-starter-go/internal/dbsql"
-	"github.com/example/hono-event-starter-go/internal/eventstore"
+	"github.com/example/go-orisun-datastar/internal/appdb"
+	"github.com/example/go-orisun-datastar/internal/dbsql"
+	"github.com/example/go-orisun-datastar/internal/eventstore"
 	"zombiezen.com/go/sqlite"
 )
 
