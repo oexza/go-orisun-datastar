@@ -5,7 +5,6 @@ import (
 	"sync"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/starfederation/datastar-go/datastar"
 )
 
 func setupReload(r chi.Router) {
@@ -13,7 +12,7 @@ func setupReload(r chi.Router) {
 	var initialReload sync.Once
 
 	r.Get("/reload", func(w http.ResponseWriter, r *http.Request) {
-		sse := datastar.NewSSE(w, r)
+		sse := newSSE(w, r)
 		reload := func() { _ = sse.ExecuteScript("window.location.reload()") }
 		initialReload.Do(reload)
 		select {
