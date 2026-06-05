@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
 
 	"github.com/oexza/go-orisun-datastar/internal/email"
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
@@ -69,7 +69,7 @@ func SendEmailValidationOTPCommandHandler(ctx context.Context, command SendEmail
 		return err
 	}
 
-	id := uuid.NewString()
+	id := uuidv7.NewString()
 	sent := NewEmailVerificationOTPSentEvent(id, time.Now(), command.EmailVerificationOTPGeneratedID, metadataWithQuery(command.Metadata, combineQueries(generatedQuery, userQuery, sentQuery)))
 	_, err = saver.SaveEvents(ctx, []eventstore.DomainEvent{sent}, model.position, append(generatedEvents, userEvents...), combineQueries(generatedQuery, userQuery, sentQuery))
 	return err

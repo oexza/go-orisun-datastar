@@ -3,9 +3,9 @@ package eventstore
 import (
 	"context"
 
-	"github.com/google/uuid"
 	"github.com/oexza/go-orisun-datastar/internal/appdb"
 	"github.com/oexza/go-orisun-datastar/internal/dbsql"
+	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
 	"zombiezen.com/go/sqlite"
 )
 
@@ -35,7 +35,7 @@ func (c *SQLiteCheckpointer) GetCheckpoint(ctx context.Context, name string) (Po
 func (c *SQLiteCheckpointer) UpdateCheckpoint(ctx context.Context, name string, position Position) error {
 	return c.db.WriteTX(ctx, func(conn *sqlite.Conn) error {
 		return dbsql.OnceUpsertEventHandlerCheckpoint(conn, dbsql.UpsertEventHandlerCheckpointParams{
-			Id:              uuid.NewString(),
+			Id:              uuidv7.NewString(),
 			Name:            name,
 			CommitPosition:  position.Commit,
 			PreparePosition: position.Prepare,

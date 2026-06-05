@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
 
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
 )
@@ -33,7 +33,7 @@ func ReopenTodoCommandHandler(ctx context.Context, command ReopenTodoCommand, sa
 	}
 
 	query := streamQuery(command.TodoID, command.UserRegisteredID)
-	eventID := uuid.NewString()
+	eventID := uuidv7.NewString()
 	event := NewTodoReopenedEvent(eventID, command.TodoID, command.UserRegisteredID, time.Now(), metadataWithQuery(command.Metadata, query))
 
 	if _, err := saver.SaveEvents(ctx, []eventstore.DomainEvent{event}, model.position, model.events, query); err != nil {

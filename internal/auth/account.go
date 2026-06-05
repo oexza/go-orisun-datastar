@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/oexza/go-orisun-datastar/internal/appdb"
@@ -71,8 +71,8 @@ func (s *Service) RegisterWithMetadata(ctx context.Context, input RegisterInput,
 		return views.User{}, errors.New("user already exists")
 	}
 
-	userRegisteredID := uuid.NewString()
-	userID := uuid.NewString()
+	userRegisteredID := uuidv7.NewString()
+	userID := uuidv7.NewString()
 	hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return views.User{}, err
@@ -95,7 +95,7 @@ func (s *Service) RegisterWithMetadata(ctx context.Context, input RegisterInput,
 			return err
 		}
 		return dbsql.OnceCreateAuthAccount(conn, dbsql.CreateAuthAccountParams{
-			Id:        uuid.NewString(),
+			Id:        uuidv7.NewString(),
 			AccountId: input.Email,
 			UserId:    userID,
 			Password:  stringPtr(string(hash)),
@@ -122,7 +122,7 @@ func (s *Service) Login(ctx context.Context, emailAddress, password string) (vie
 	}
 	err = s.db.WriteTX(ctx, func(conn *sqlite.Conn) error {
 		return dbsql.OnceCreateAuthSession(conn, dbsql.CreateAuthSessionParams{
-			Id:        uuid.NewString(),
+			Id:        uuidv7.NewString(),
 			Token:     token,
 			UserId:    user.ID,
 			ExpiresAt: appdb.SQLTime(time.Now().Add(90 * 24 * time.Hour)),
@@ -227,7 +227,7 @@ func (s *Service) generateEmailVerificationOTP(ctx context.Context, user views.U
 	if err != nil {
 		return err
 	}
-	otpID := uuid.NewString()
+	otpID := uuidv7.NewString()
 	expiresAt := time.Now().Add(15 * time.Minute)
 	query := emailVerificationOTPGeneratedQuery(otpID)
 	event := NewEmailVerificationOTPGeneratedEvent(otpID, code, expiresAt, user.UserRegisteredID, metadataWithQuery(metadata, query))
@@ -306,7 +306,7 @@ func (s *Service) ValidateOTPWithMetadata(ctx context.Context, userID, code stri
 		return errors.New("registered user event not found")
 	}
 
-	validationID := uuid.NewString()
+	validationID := uuidv7.NewString()
 	event := NewEmailVerificationOTPValidatedEvent(validationID, time.Now(), otp.id, user.UserRegisteredID, metadataWithQuery(metadata, combineQueries(generatedQuery, validationQuery)))
 	modelPosition := eventstore.NoEventPosition
 	handledEvents := append(append(generatedEvents, validationEvents...), userEvents...)
@@ -332,7 +332,7 @@ func (s *Service) RequestPasswordResetWithMetadata(ctx context.Context, emailAdd
 	if err != nil {
 		return err
 	}
-	requestID := uuid.NewString()
+	requestID := uuidv7.NewString()
 	expiresAt := time.Now().Add(30 * time.Minute)
 	event := NewPasswordResetRequestedEvent(requestID, user.Email, token, expiresAt, user.UserRegisteredID, metadata)
 	if err := s.db.WriteTX(ctx, func(conn *sqlite.Conn) error {
@@ -375,7 +375,7 @@ func (s *Service) ResetPasswordWithMetadata(ctx context.Context, token, password
 	if err := s.setPassword(ctx, userID, password); err != nil {
 		return err
 	}
-	passwordResetCompletedID := uuid.NewString()
+	passwordResetCompletedID := uuidv7.NewString()
 	event := NewPasswordResetCompletedEvent(passwordResetCompletedID, time.Now(), verification.Id, user.UserRegisteredID, metadata)
 	_, err = s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, eventstore.Query{})
 	return err
@@ -465,7 +465,7 @@ func (s *Service) ChangePasswordWithMetadata(ctx context.Context, user views.Use
 	if err := s.setPassword(ctx, user.ID, newPassword); err != nil {
 		return err
 	}
-	passwordChangedID := uuid.NewString()
+	passwordChangedID := uuidv7.NewString()
 	event := NewPasswordChangedEvent(passwordChangedID, time.Now(), user.UserRegisteredID, metadata)
 	_, err = s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, eventstore.Query{})
 	return err
@@ -480,7 +480,7 @@ func (s *Service) UpdateNameWithMetadata(ctx context.Context, user views.User, n
 	if name == "" {
 		return errors.New("name is required")
 	}
-	userNameChangedID := uuid.NewString()
+	userNameChangedID := uuidv7.NewString()
 	event := NewUserNameChangedEvent(userNameChangedID, name, time.Now(), user.UserRegisteredID, metadata)
 	if _, err := s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, eventstore.Query{}); err != nil {
 		return err
