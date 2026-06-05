@@ -18,7 +18,7 @@ type ProfileImageUploadedAuthUserEventHandler struct {
 	bridge AuthUserImageBridge
 }
 
-func NewProfileImageUploadedAuthUserEventHandler(subscriber eventstore.Subscriber, checkpointer eventstore.Checkpointer, bridge AuthUserImageBridge, logger *slog.Logger) (*ProfileImageUploadedAuthUserEventHandler, error) {
+func NewProfileImageUploadedAuthUserEventHandler(subscriber EventSubscriber, checkpointer EventCheckpointer, bridge AuthUserImageBridge, logger *slog.Logger) (*ProfileImageUploadedAuthUserEventHandler, error) {
 	handler := &ProfileImageUploadedAuthUserEventHandler{bridge: bridge}
 	global, err := eventstore.NewGlobalEventHandler(eventstore.GlobalEventHandlerConfig{
 		Subscriber:      subscriber,

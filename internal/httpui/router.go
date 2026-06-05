@@ -23,11 +23,15 @@ type contextKey string
 
 const userKey contextKey = "user"
 
+type MessageSubscriber interface {
+	Subscribe(ctx context.Context, subject string, handle func(context.Context, []byte)) (eventstore.MessageSubscription, error)
+}
+
 type Server struct {
 	Auth        *auth.Service
 	Todos       *todo.Service
 	Profile     *profile.Service
-	Subscriber  eventstore.MessageSubscriber
+	Subscriber  MessageSubscriber
 	ViewStore   viewstore.Store
 	Development bool
 }

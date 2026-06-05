@@ -60,10 +60,10 @@ type TodoDeletedProjection struct {
 type TodoReadModelEventHandler struct {
 	global    *eventstore.GlobalEventHandler
 	readModel TodoReadModelWriter
-	publisher eventstore.Publisher
+	publisher EventPublisher
 }
 
-func NewTodoReadModelEventHandler(subscriber eventstore.Subscriber, checkpointer eventstore.Checkpointer, readModel TodoReadModelWriter, publisher eventstore.Publisher, logger *slog.Logger) (*TodoReadModelEventHandler, error) {
+func NewTodoReadModelEventHandler(subscriber EventSubscriber, checkpointer EventCheckpointer, readModel TodoReadModelWriter, publisher EventPublisher, logger *slog.Logger) (*TodoReadModelEventHandler, error) {
 	handler := &TodoReadModelEventHandler{readModel: readModel, publisher: publisher}
 	global, err := eventstore.NewGlobalEventHandler(eventstore.GlobalEventHandlerConfig{
 		Subscriber:      subscriber,

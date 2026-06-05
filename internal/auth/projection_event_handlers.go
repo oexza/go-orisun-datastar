@@ -27,7 +27,7 @@ type RegistrationOTPToBeGeneratedEventHandler struct {
 	issuer EmailVerificationOTPIssuer
 }
 
-func NewRegistrationOTPToBeGeneratedEventHandler(subscriber eventstore.Subscriber, checkpointer eventstore.Checkpointer, issuer EmailVerificationOTPIssuer, logger *slog.Logger) (*RegistrationOTPToBeGeneratedEventHandler, error) {
+func NewRegistrationOTPToBeGeneratedEventHandler(subscriber EventSubscriber, checkpointer EventCheckpointer, issuer EmailVerificationOTPIssuer, logger *slog.Logger) (*RegistrationOTPToBeGeneratedEventHandler, error) {
 	handler := &RegistrationOTPToBeGeneratedEventHandler{issuer: issuer}
 	global, err := eventstore.NewGlobalEventHandler(eventstore.GlobalEventHandlerConfig{
 		Subscriber:      subscriber,
@@ -73,10 +73,10 @@ func (h *RegistrationOTPToBeGeneratedEventHandler) handle(ctx context.Context, r
 type AuthUserProjectionEventHandler struct {
 	global    *eventstore.GlobalEventHandler
 	writer    AuthUserProjectionWriter
-	retriever eventstore.Retriever
+	retriever EventRetriever
 }
 
-func NewAuthUserProjectionEventHandler(subscriber eventstore.Subscriber, checkpointer eventstore.Checkpointer, retriever eventstore.Retriever, writer AuthUserProjectionWriter, logger *slog.Logger) (*AuthUserProjectionEventHandler, error) {
+func NewAuthUserProjectionEventHandler(subscriber EventSubscriber, checkpointer EventCheckpointer, retriever EventRetriever, writer AuthUserProjectionWriter, logger *slog.Logger) (*AuthUserProjectionEventHandler, error) {
 	handler := &AuthUserProjectionEventHandler{retriever: retriever, writer: writer}
 	global, err := eventstore.NewGlobalEventHandler(eventstore.GlobalEventHandlerConfig{
 		Subscriber:      subscriber,
