@@ -3,6 +3,7 @@ package views
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -40,6 +41,22 @@ func displayName(user User) string {
 		return user.Username
 	}
 	return user.Email
+}
+
+func userInitials(user User) string {
+	name := strings.TrimSpace(displayName(user))
+	if name == "" {
+		return "?"
+	}
+
+	parts := strings.Fields(name)
+	if len(parts) == 1 {
+		return strings.ToUpper(string([]rune(parts[0])[0]))
+	}
+
+	first := []rune(parts[0])
+	last := []rune(parts[len(parts)-1])
+	return strings.ToUpper(string(first[0]) + string(last[0]))
 }
 
 func postFormSSE(path string) string {

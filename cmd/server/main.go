@@ -85,27 +85,8 @@ func main() {
 		viewStore = viewstore.NewMemoryStore()
 	}
 
-	storageProvider := storage.Provider(storage.NoopProvider{})
-	if cfg.StorageProvider == "garage" && cfg.StorageBucket != "" {
-		provider, err := storage.NewS3Provider(ctx, cfg.StorageEndpoint, cfg.StorageAccessKey, cfg.StorageSecretKey, cfg.StorageBucket, cfg.StoragePublicURL, "us-east-1", true)
-		if err != nil {
-			logger.Error("create storage", "err", err)
-			os.Exit(1)
-		}
-		storageProvider = provider
-	}
-	if cfg.StorageProvider == "r2" && cfg.R2Bucket != "" {
-		provider, err := storage.NewS3Provider(ctx, cfg.R2Endpoint, cfg.R2AccessKeyID, cfg.R2SecretAccessKey, cfg.R2Bucket, cfg.R2PublicURL, "auto", false)
-		if err != nil {
-			logger.Error("create storage", "err", err)
-			os.Exit(1)
-		}
-		storageProvider = provider
-	}
-
-	emailSender := email.BrevoSender{
-		APIKey: cfg.BrevoAPIKey, SenderEmail: cfg.BrevoSenderEmail, SenderName: cfg.BrevoSenderName,
-	}
+	storageProvider := storage.NewLocalProvider(cfg.UploadDir, cfg.UploadBaseURL)
+	emailSender := email.LogSender{Logger: logger}
 	authService := auth.NewService(db, orisunStore, orisunStore, !cfg.DevelopmentCookie)
 	todoReadModel := todo.NewReadModel(db)
 	todoService := todo.NewService(todoReadModel, orisunStore, orisunStore, bus)

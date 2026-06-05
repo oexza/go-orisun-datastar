@@ -2,7 +2,7 @@
 
 This repository is the Go/chi/templ port of the event-sourced Hono starters. Treat the sibling `../frases-backend` project as the richer reference implementation for architecture, UX patterns, feature boundaries, Datastar flows, CQRS-style SSE, NATS KV view-state, and visual direction. Use `../hono-event-starter` only as the smaller starter reference.
 
-The app uses server-rendered templ components, Datastar SSE, SQLite read models, embedded Orisun SQLite events, NATS notifications, Brevo email, and S3/R2/Garage-compatible storage.
+The app uses server-rendered templ components, Datastar SSE, SQLite read models, embedded Orisun SQLite events, NATS notifications, logged email, and local filesystem upload storage.
 
 ## Commands
 
@@ -161,7 +161,7 @@ When porting DaisyUI-style screens:
 | `internal/natsbus` | NATS notification bus |
 | `internal/viewstore` | Frases-style per-session view-state store with NATS KV and memory fallback |
 | `internal/appdb` | SQLite database wrapper backed by `github.com/delaneyj/toolbelt/db` |
-| `internal/storage` | S3/R2/Garage storage |
+| `internal/storage` | Local upload storage |
 | `migrations` | SQLite schema and index migrations |
 | `src/input.css` | Editable CSS source |
 | `static/style.css` | Generated stylesheet served by the app |

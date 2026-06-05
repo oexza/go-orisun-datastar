@@ -59,9 +59,8 @@ tasks:
 
   css:
     sources:
-      - src/input.css
-      - src/daisyui/daisyui.js
-      - src/daisyui/daisyui-theme.js
+      - src/**/*.css
+      - src/daisyui/**/*.js
       - internal/**/*.templ
       - internal/**/*.go
     generates:

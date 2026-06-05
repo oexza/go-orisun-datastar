@@ -1,6 +1,6 @@
-# Hono Event Starter, Go Edition
+# Go Event Starter
 
-A Go/chi/templ version of the Bun/Hono event-sourced starter. It keeps the same architectural boundaries: immutable Orisun events are the source of truth, SQLite stores read models and auth/session tables, projections are checkpointed, and Datastar SSE patches server-rendered fragments.
+A Go/chi/templ starter for event-sourced web applications. Immutable Orisun events are the source of truth, SQLite stores read models and auth/session tables, projections are checkpointed, and Datastar SSE patches server-rendered fragments.
 
 ## Variants
 
@@ -22,13 +22,9 @@ task build
 
 ## Services
 
-Start the external services used by local development:
+The starter runs without email or object-storage credentials. Outbound emails are logged, and uploaded profile images are written to `static/uploads`.
 
-```bash
-docker compose up nats garage -d
-```
-
-Copy the root `.env.example` values into your shell or a local env loader. The Go app reads `SQLITE_PATH`, `ORISUN_SQLITE_DIR`, `NATS_URL`, `ORISUN_GENERAL_BOUNDARY`, `BREVO_*`, `STORAGE_*`, `R2_*`, `APP_URL`, and `PORT` variables. SQLite defaults to `data/app.sqlite`; embedded Orisun defaults to `data/orisun`.
+Copy the root `.env.example` values into your shell or a local env loader if you want to override defaults. The Go app reads `SQLITE_PATH`, `ORISUN_SQLITE_DIR`, `NATS_URL`, `ORISUN_GENERAL_BOUNDARY`, `UPLOAD_DIR`, `UPLOAD_BASE_URL`, `APP_URL`, and `PORT` variables. SQLite defaults to `data/app.sqlite`; embedded Orisun defaults to `data/orisun`.
 
 ## Notes
 
