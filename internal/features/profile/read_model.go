@@ -6,7 +6,9 @@ import (
 	"strings"
 
 	"github.com/example/hono-event-starter-go/internal/appdb"
+	"github.com/example/hono-event-starter-go/internal/dbsql"
 	"github.com/example/hono-event-starter-go/internal/eventstore"
+	"zombiezen.com/go/sqlite"
 )
 
 const (
@@ -30,78 +32,68 @@ func (m *ReadModel) UpsertRegisteredUser(ctx context.Context, resolved eventstor
 	firstName, _ := data["firstName"].(string)
 	lastName, _ := data["lastName"].(string)
 	name := strings.TrimSpace(firstName + " " + lastName)
-	_, err := m.db.Exec(ctx, `
-		INSERT INTO profile_stats (user_id, name, username, email, last_event_commit_position, last_event_prepare_position)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		ON CONFLICT (user_id) DO UPDATE SET
-		    name = EXCLUDED.name,
-		    username = EXCLUDED.username,
-		    email = EXCLUDED.email,
-		    last_event_commit_position = EXCLUDED.last_event_commit_position,
-		    last_event_prepare_position = EXCLUDED.last_event_prepare_position,
-		    updated_at = now()
-	`, userRegisteredID, name, username, emailAddress, resolved.Position.Commit, resolved.Position.Prepare)
-	return err
+	return m.db.WriteTX(ctx, func(conn *sqlite.Conn) error {
+		return dbsql.OnceUpsertRegisteredProfileUser(conn, dbsql.UpsertRegisteredProfileUserParams{
+			UserId:                   userRegisteredID,
+			Name:                     stringPtr(name),
+			Username:                 stringPtr(username),
+			Email:                    stringPtr(emailAddress),
+			LastEventCommitPosition:  resolved.Position.Commit,
+			LastEventPreparePosition: resolved.Position.Prepare,
+		})
+	})
 }
 
 func (m *ReadModel) UpdateName(ctx context.Context, resolved eventstore.ResolvedEvent) error {
 	userRegisteredID, _ := eventstore.Scope(resolved.Event.Data)["userRegisteredId"].(string)
 	name, _ := resolved.Event.Data["name"].(string)
-	_, err := m.db.Exec(ctx, `
-		INSERT INTO profile_stats (user_id, name, last_event_commit_position, last_event_prepare_position)
-		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (user_id) DO UPDATE SET
-		    name = EXCLUDED.name,
-		    last_event_commit_position = EXCLUDED.last_event_commit_position,
-		    last_event_prepare_position = EXCLUDED.last_event_prepare_position,
-		    updated_at = now()
-	`, userRegisteredID, name, resolved.Position.Commit, resolved.Position.Prepare)
-	return err
+	return m.db.WriteTX(ctx, func(conn *sqlite.Conn) error {
+		return dbsql.OnceUpsertProfileName(conn, dbsql.UpsertProfileNameParams{
+			UserId:                   userRegisteredID,
+			Name:                     stringPtr(name),
+			LastEventCommitPosition:  resolved.Position.Commit,
+			LastEventPreparePosition: resolved.Position.Prepare,
+		})
+	})
 }
 
 func (m *ReadModel) UpdateBio(ctx context.Context, resolved eventstore.ResolvedEvent) error {
 	userRegisteredID, _ := eventstore.Scope(resolved.Event.Data)["userRegisteredId"].(string)
 	bio, _ := resolved.Event.Data["bio"].(string)
-	_, err := m.db.Exec(ctx, `
-		INSERT INTO profile_stats (user_id, bio, last_event_commit_position, last_event_prepare_position)
-		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (user_id) DO UPDATE SET
-		    bio = EXCLUDED.bio,
-		    last_event_commit_position = EXCLUDED.last_event_commit_position,
-		    last_event_prepare_position = EXCLUDED.last_event_prepare_position,
-		    updated_at = now()
-	`, userRegisteredID, bio, resolved.Position.Commit, resolved.Position.Prepare)
-	return err
+	return m.db.WriteTX(ctx, func(conn *sqlite.Conn) error {
+		return dbsql.OnceUpsertProfileBio(conn, dbsql.UpsertProfileBioParams{
+			UserId:                   userRegisteredID,
+			Bio:                      stringPtr(bio),
+			LastEventCommitPosition:  resolved.Position.Commit,
+			LastEventPreparePosition: resolved.Position.Prepare,
+		})
+	})
 }
 
 func (m *ReadModel) UpdateImage(ctx context.Context, resolved eventstore.ResolvedEvent) error {
 	userRegisteredID, _ := eventstore.Scope(resolved.Event.Data)["userRegisteredId"].(string)
 	url, _ := resolved.Event.Data["imageUrl"].(string)
-	_, err := m.db.Exec(ctx, `
-		INSERT INTO profile_stats (user_id, image, last_event_commit_position, last_event_prepare_position)
-		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (user_id) DO UPDATE SET
-		    image = EXCLUDED.image,
-		    last_event_commit_position = EXCLUDED.last_event_commit_position,
-		    last_event_prepare_position = EXCLUDED.last_event_prepare_position,
-		    updated_at = now()
-	`, userRegisteredID, url, resolved.Position.Commit, resolved.Position.Prepare)
-	return err
+	return m.db.WriteTX(ctx, func(conn *sqlite.Conn) error {
+		return dbsql.OnceUpsertProfileImage(conn, dbsql.UpsertProfileImageParams{
+			UserId:                   userRegisteredID,
+			Image:                    stringPtr(url),
+			LastEventCommitPosition:  resolved.Position.Commit,
+			LastEventPreparePosition: resolved.Position.Prepare,
+		})
+	})
 }
 
 func (m *ReadModel) UpdateHeaderImage(ctx context.Context, resolved eventstore.ResolvedEvent) error {
 	userRegisteredID, _ := eventstore.Scope(resolved.Event.Data)["userRegisteredId"].(string)
 	url, _ := resolved.Event.Data["imageUrl"].(string)
-	_, err := m.db.Exec(ctx, `
-		INSERT INTO profile_stats (user_id, header_image_url, last_event_commit_position, last_event_prepare_position)
-		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (user_id) DO UPDATE SET
-		    header_image_url = EXCLUDED.header_image_url,
-		    last_event_commit_position = EXCLUDED.last_event_commit_position,
-		    last_event_prepare_position = EXCLUDED.last_event_prepare_position,
-		    updated_at = now()
-	`, userRegisteredID, url, resolved.Position.Commit, resolved.Position.Prepare)
-	return err
+	return m.db.WriteTX(ctx, func(conn *sqlite.Conn) error {
+		return dbsql.OnceUpsertProfileHeaderImage(conn, dbsql.UpsertProfileHeaderImageParams{
+			UserId:                   userRegisteredID,
+			HeaderImageUrl:           stringPtr(url),
+			LastEventCommitPosition:  resolved.Position.Commit,
+			LastEventPreparePosition: resolved.Position.Prepare,
+		})
+	})
 }
 
 type ReadModelEventHandler struct {
@@ -160,4 +152,8 @@ func readModelEventHandlerQuery() eventstore.Query {
 		{Tags: []eventstore.Tag{{Key: "eventType", Value: ProfileImageUploaded}}},
 		{Tags: []eventstore.Tag{{Key: "eventType", Value: ProfileHeaderImageUploaded}}},
 	}}
+}
+
+func stringPtr(value string) *string {
+	return &value
 }

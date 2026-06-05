@@ -5,7 +5,9 @@ import (
 	"time"
 
 	"github.com/example/hono-event-starter-go/internal/appdb"
+	"github.com/example/hono-event-starter-go/internal/dbsql"
 	"github.com/example/hono-event-starter-go/internal/views"
+	"zombiezen.com/go/sqlite"
 )
 
 type ReadModel struct {
@@ -17,85 +19,85 @@ func NewReadModel(db *appdb.DB) *ReadModel {
 }
 
 func (m *ReadModel) List(ctx context.Context, userRegisteredID string) ([]views.Todo, error) {
-	rows, err := m.db.Query(ctx, `
-		SELECT todo_id, title, completed, created_at, updated_at
-		FROM todo_items
-		WHERE user_registered_id = $1 AND deleted_at IS NULL
-		ORDER BY created_at DESC, todo_id DESC
-	`, userRegisteredID)
-	if err != nil {
+	var rows []dbsql.ListTodosRes
+	if err := m.db.ReadTX(ctx, func(conn *sqlite.Conn) error {
+		var err error
+		rows, err = dbsql.OnceListTodos(conn, userRegisteredID)
+		return err
+	}); err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	var todos []views.Todo
-	for rows.Next() {
-		var todo views.Todo
-		if err := rows.Scan(&todo.TodoID, &todo.Title, &todo.Completed, &todo.CreatedAt, &todo.UpdatedAt); err != nil {
-			return nil, err
-		}
-		todos = append(todos, todo)
+	todos := make([]views.Todo, 0, len(rows))
+	for _, row := range rows {
+		todos = append(todos, views.Todo{
+			TodoID:    row.TodoId,
+			Title:     row.Title,
+			Completed: row.Completed != 0,
+			CreatedAt: parseDBTime(row.CreatedAt),
+			UpdatedAt: parseDBTime(row.UpdatedAt),
+		})
 	}
-	return todos, rows.Err()
+	return todos, nil
 }
 
 func (m *ReadModel) InsertCreatedTodo(ctx context.Context, event TodoCreatedProjection) error {
-	_, err := m.db.Exec(ctx, `
-		INSERT INTO todo_items (todo_id, user_registered_id, title, completed, completed_at, deleted_at, last_event_commit_position, last_event_prepare_position, created_at, updated_at)
-		VALUES ($1, $2, $3, false, null, null, $4, $5, $6, $6)
-		ON CONFLICT (todo_id) DO NOTHING
-	`, event.TodoID, event.UserRegisteredID, event.Title, event.Position.Commit, event.Position.Prepare, event.CreatedAt)
-	return err
+	return m.db.WriteTX(ctx, func(conn *sqlite.Conn) error {
+		return dbsql.OnceInsertCreatedTodo(conn, dbsql.InsertCreatedTodoParams{
+			TodoId:                   event.TodoID,
+			UserRegisteredId:         event.UserRegisteredID,
+			Title:                    event.Title,
+			LastEventCommitPosition:  event.Position.Commit,
+			LastEventPreparePosition: event.Position.Prepare,
+			CreatedAt:                appdb.SQLTime(event.CreatedAt),
+		})
+	})
 }
 
 func (m *ReadModel) RenameTodo(ctx context.Context, event TodoRenamedProjection) error {
-	_, err := m.db.Exec(ctx, `
-		UPDATE todo_items
-		SET title = $1,
-		    last_event_commit_position = $2,
-		    last_event_prepare_position = $3,
-		    updated_at = $4
-		WHERE todo_id = $5
-	`, event.Title, event.Position.Commit, event.Position.Prepare, event.RenamedAt, event.TodoID)
-	return err
+	return m.db.WriteTX(ctx, func(conn *sqlite.Conn) error {
+		return dbsql.OnceRenameTodo(conn, dbsql.RenameTodoParams{
+			Title:                    event.Title,
+			LastEventCommitPosition:  event.Position.Commit,
+			LastEventPreparePosition: event.Position.Prepare,
+			UpdatedAt:                appdb.SQLTime(event.RenamedAt),
+			TodoId:                   event.TodoID,
+		})
+	})
 }
 
 func (m *ReadModel) CompleteTodo(ctx context.Context, event TodoCompletedProjection) error {
-	_, err := m.db.Exec(ctx, `
-		UPDATE todo_items
-		SET completed = true,
-		    completed_at = $1,
-		    last_event_commit_position = $2,
-		    last_event_prepare_position = $3,
-		    updated_at = $1
-		WHERE todo_id = $4
-	`, event.CompletedAt, event.Position.Commit, event.Position.Prepare, event.TodoID)
-	return err
+	completedAt := appdb.SQLTime(event.CompletedAt)
+	return m.db.WriteTX(ctx, func(conn *sqlite.Conn) error {
+		return dbsql.OnceCompleteTodo(conn, dbsql.CompleteTodoParams{
+			CompletedAt:              &completedAt,
+			LastEventCommitPosition:  event.Position.Commit,
+			LastEventPreparePosition: event.Position.Prepare,
+			TodoId:                   event.TodoID,
+		})
+	})
 }
 
 func (m *ReadModel) ReopenTodo(ctx context.Context, event TodoReopenedProjection) error {
-	_, err := m.db.Exec(ctx, `
-		UPDATE todo_items
-		SET completed = false,
-		    completed_at = null,
-		    last_event_commit_position = $1,
-		    last_event_prepare_position = $2,
-		    updated_at = $3
-		WHERE todo_id = $4
-	`, event.Position.Commit, event.Position.Prepare, event.ReopenedAt, event.TodoID)
-	return err
+	return m.db.WriteTX(ctx, func(conn *sqlite.Conn) error {
+		return dbsql.OnceReopenTodo(conn, dbsql.ReopenTodoParams{
+			LastEventCommitPosition:  event.Position.Commit,
+			LastEventPreparePosition: event.Position.Prepare,
+			UpdatedAt:                appdb.SQLTime(event.ReopenedAt),
+			TodoId:                   event.TodoID,
+		})
+	})
 }
 
 func (m *ReadModel) DeleteTodo(ctx context.Context, event TodoDeletedProjection) error {
-	_, err := m.db.Exec(ctx, `
-		UPDATE todo_items
-		SET deleted_at = $1,
-		    last_event_commit_position = $2,
-		    last_event_prepare_position = $3,
-		    updated_at = $1
-		WHERE todo_id = $4
-	`, event.DeletedAt, event.Position.Commit, event.Position.Prepare, event.TodoID)
-	return err
+	deletedAt := appdb.SQLTime(event.DeletedAt)
+	return m.db.WriteTX(ctx, func(conn *sqlite.Conn) error {
+		return dbsql.OnceDeleteTodo(conn, dbsql.DeleteTodoParams{
+			DeletedAt:                &deletedAt,
+			LastEventCommitPosition:  event.Position.Commit,
+			LastEventPreparePosition: event.Position.Prepare,
+			TodoId:                   event.TodoID,
+		})
+	})
 }
 
 func parseTime(value any) time.Time {
@@ -105,4 +107,14 @@ func parseTime(value any) time.Time {
 		return time.Now()
 	}
 	return parsed
+}
+
+func parseDBTime(value string) time.Time {
+	for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02 15:04:05"} {
+		parsed, err := time.Parse(layout, value)
+		if err == nil {
+			return parsed
+		}
+	}
+	return time.Time{}
 }

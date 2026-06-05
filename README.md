@@ -14,6 +14,7 @@ This repository keeps database-backed variants on separate branches:
 ```bash
 task migrate
 task seed
+task sqlc
 task dev
 task test
 task build
@@ -32,6 +33,7 @@ Copy the root `.env.example` values into your shell or a local env loader. The G
 ## Notes
 
 - HTTP uses `github.com/go-chi/chi/v5`.
+- The `sqlite` branch generates zombiezen SQLite statements with sqlc and `github.com/delaneyj/toolbelt/sqlc-gen-zombiezen`; SQL lives in `queries/` and generated code lives in `internal/dbsql/`.
 - Views are authored as `.templ` components and generated with `go tool templ generate`.
 - Static assets are served through `internal/resources` and referenced from templ with `resources.StaticPath`.
 - Todo SSE uses a Frases-style ViewStore path: NATS notifications update per-session view state, and the SSE route patches from the ViewStore watcher.

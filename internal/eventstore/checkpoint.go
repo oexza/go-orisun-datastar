@@ -4,7 +4,9 @@ import (
 	"context"
 
 	"github.com/example/hono-event-starter-go/internal/appdb"
+	"github.com/example/hono-event-starter-go/internal/dbsql"
 	"github.com/google/uuid"
+	"zombiezen.com/go/sqlite"
 )
 
 type SQLiteCheckpointer struct {
@@ -16,29 +18,27 @@ func NewSQLiteCheckpointer(db *appdb.DB) *SQLiteCheckpointer {
 }
 
 func (c *SQLiteCheckpointer) GetCheckpoint(ctx context.Context, name string) (Position, bool, error) {
-	var position Position
-	err := c.db.QueryRow(ctx, `
-		SELECT commit_position, prepare_position
-		FROM projector_checkpoint
-		WHERE name = $1
-	`, name).Scan(&position.Commit, &position.Prepare)
-	if err != nil {
-		if err == appdb.ErrNoRows {
-			return NoEventPosition, false, nil
-		}
+	var row *dbsql.GetEventHandlerCheckpointRes
+	if err := c.db.ReadTX(ctx, func(conn *sqlite.Conn) error {
+		var err error
+		row, err = dbsql.OnceGetEventHandlerCheckpoint(conn, name)
+		return err
+	}); err != nil {
 		return NoEventPosition, false, err
 	}
-	return position, true, nil
+	if row == nil {
+		return NoEventPosition, false, nil
+	}
+	return Position{Commit: row.CommitPosition, Prepare: row.PreparePosition}, true, nil
 }
 
 func (c *SQLiteCheckpointer) UpdateCheckpoint(ctx context.Context, name string, position Position) error {
-	_, err := c.db.Exec(ctx, `
-		INSERT INTO projector_checkpoint (id, name, commit_position, prepare_position, updated_at)
-		VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
-		ON CONFLICT (name) DO UPDATE
-		SET commit_position = EXCLUDED.commit_position,
-		    prepare_position = EXCLUDED.prepare_position,
-		    updated_at = CURRENT_TIMESTAMP
-	`, uuid.NewString(), name, position.Commit, position.Prepare)
-	return err
+	return c.db.WriteTX(ctx, func(conn *sqlite.Conn) error {
+		return dbsql.OnceUpsertEventHandlerCheckpoint(conn, dbsql.UpsertEventHandlerCheckpointParams{
+			Id:              uuid.NewString(),
+			Name:            name,
+			CommitPosition:  position.Commit,
+			PreparePosition: position.Prepare,
+		})
+	})
 }
