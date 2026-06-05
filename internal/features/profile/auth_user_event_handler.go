@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/example/go-orisun-datastar/internal/eventstore"
+	"github.com/oexza/go-orisun-datastar/internal/eventstore"
 )
 
 const ProfileImageUploadedAuthUserEventHandlerName = "profile_image_uploaded_better_auth_event_handler"

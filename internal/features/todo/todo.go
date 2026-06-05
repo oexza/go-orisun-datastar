@@ -3,8 +3,8 @@ package todo
 import (
 	"context"
 
-	"github.com/example/go-orisun-datastar/internal/eventstore"
-	"github.com/example/go-orisun-datastar/internal/views"
+	"github.com/oexza/go-orisun-datastar/internal/eventstore"
+	"github.com/oexza/go-orisun-datastar/internal/views"
 )
 
 type Service struct {

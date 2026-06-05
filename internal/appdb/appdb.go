@@ -6,7 +6,7 @@ import (
 	"time"
 
 	toolbeltdb "github.com/delaneyj/toolbelt/db"
-	appmigrations "github.com/example/go-orisun-datastar/migrations"
+	appmigrations "github.com/oexza/go-orisun-datastar/migrations"
 )
 
 var ErrNoRows = errors.New("no rows in result set")

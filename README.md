@@ -1,6 +1,6 @@
 # Go-Orisun-Datastar
 
-Go-Orisun-Datastar is a Go/chi/templ starter for event-sourced web applications. Orisun stores immutable domain events, SQLite stores read models and auth/session tables, Datastar streams server-rendered UI updates over SSE, and Tailwind/DaisyUI provide the frontend system.
+Go-Orisun-Datastar is a Go/chi/templ starter for event-sourced web applications. [Orisun](https://github.com/oexza/Orisun) stores immutable domain events, SQLite stores read models and auth/session tables, Datastar streams server-rendered UI updates over SSE, and Tailwind/DaisyUI provide the frontend system.
 
 The default setup is intentionally local-first: email messages are logged, profile uploads are written to `static/uploads`, and no third-party email or object-storage credentials are required.
 
@@ -16,7 +16,7 @@ This repository keeps database-backed variants on separate branches:
 - Go HTTP server with `github.com/go-chi/chi/v5`
 - Server-rendered `.templ` views
 - Datastar SSE for form submissions, redirects, indicators, fragments, and long-lived read streams
-- Orisun event sourcing with typed domain events
+- [Orisun](https://github.com/oexza/Orisun) event sourcing with typed domain events
 - CQRS-style read models and replayable event handlers
 - sqlc-generated database access
 - Authentication, sessions, email verification, password reset, profile editing, and todos

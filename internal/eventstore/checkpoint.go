@@ -3,9 +3,9 @@ package eventstore
 import (
 	"context"
 
-	"github.com/example/go-orisun-datastar/internal/appdb"
-	"github.com/example/go-orisun-datastar/internal/dbsql"
 	"github.com/google/uuid"
+	"github.com/oexza/go-orisun-datastar/internal/appdb"
+	"github.com/oexza/go-orisun-datastar/internal/dbsql"
 	"zombiezen.com/go/sqlite"
 )
 

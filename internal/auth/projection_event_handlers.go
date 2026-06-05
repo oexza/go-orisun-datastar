@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/example/go-orisun-datastar/internal/eventstore"
-	"github.com/example/go-orisun-datastar/internal/views"
+	"github.com/oexza/go-orisun-datastar/internal/eventstore"
+	"github.com/oexza/go-orisun-datastar/internal/views"
 )
 
 const (

@@ -10,9 +10,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/example/go-orisun-datastar/internal/eventstore"
-	"github.com/example/go-orisun-datastar/internal/storage"
-	"github.com/example/go-orisun-datastar/internal/views"
+	"github.com/oexza/go-orisun-datastar/internal/eventstore"
+	"github.com/oexza/go-orisun-datastar/internal/storage"
+	"github.com/oexza/go-orisun-datastar/internal/views"
 )
 
 type Service struct {

@@ -3,7 +3,7 @@ package profile
 import (
 	"time"
 
-	"github.com/example/go-orisun-datastar/internal/eventstore"
+	"github.com/oexza/go-orisun-datastar/internal/eventstore"
 )
 
 const (
