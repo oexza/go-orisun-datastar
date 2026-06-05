@@ -20,7 +20,7 @@ type SendEmailValidationOTPCommand struct {
 	Metadata                        CommandMetadata
 }
 
-func SendEmailValidationOTPCommandHandler(ctx context.Context, command SendEmailValidationOTPCommand, saver eventstore.Saver, retriever eventstore.Retriever, sender email.Sender) error {
+func SendEmailValidationOTPCommandHandler(ctx context.Context, command SendEmailValidationOTPCommand, saver eventstore.Saver, retriever eventstore.Retriever, sender EmailSender) error {
 	generatedQuery := emailVerificationOTPGeneratedQuery(command.EmailVerificationOTPGeneratedID)
 	generatedEvents, err := retriever.GetEvents(ctx, eventstore.NoEventPosition, 1, eventstore.Forward, generatedQuery)
 	if err != nil {
@@ -72,7 +72,7 @@ type SendPasswordResetEmailCommand struct {
 	Metadata                 CommandMetadata
 }
 
-func SendPasswordResetEmailCommandHandler(ctx context.Context, command SendPasswordResetEmailCommand, saver eventstore.Saver, retriever eventstore.Retriever, sender email.Sender, appURL string) error {
+func SendPasswordResetEmailCommandHandler(ctx context.Context, command SendPasswordResetEmailCommand, saver eventstore.Saver, retriever eventstore.Retriever, sender EmailSender, appURL string) error {
 	requestedQuery := passwordResetRequestedQuery(command.PasswordResetRequestedID)
 	requestedEvents, err := retriever.GetEvents(ctx, eventstore.NoEventPosition, 1, eventstore.Forward, requestedQuery)
 	if err != nil {

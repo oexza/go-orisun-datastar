@@ -2,14 +2,16 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/oexza/go-orisun-datastar/internal/auth"
 	"github.com/oexza/go-orisun-datastar/internal/config"
@@ -22,35 +24,105 @@ import (
 	"github.com/oexza/go-orisun-datastar/internal/natsbus"
 	"github.com/oexza/go-orisun-datastar/internal/postgres"
 	"github.com/oexza/go-orisun-datastar/internal/storage"
+	"github.com/oexza/go-orisun-datastar/internal/viewstore"
 )
 
-func main() {
-	migrateOnly := flag.Bool("migrate-only", false, "run database migrations and exit")
-	seedOnly := flag.Bool("seed-only", false, "run seed tasks and exit")
-	flag.Parse()
+type runOptions struct {
+	migrateOnly bool
+	seedOnly    bool
+}
 
+type appComponents struct {
+	authService      *auth.Service
+	todoService      *todo.Service
+	profileService   *profile.Service
+	todoReadModel    *todo.ReadModel
+	profileReadModel *profile.ReadModel
+	checkpointer     eventstore.Checkpointer
+	emailSender      email.Sender
+}
+
+type eventHandler interface {
+	StartSubscribing(context.Context) error
+	StopSubscribing()
+}
+
+type eventHandlerFactory struct {
+	name   string
+	create func() (eventHandler, error)
+}
+
+func main() {
+	opts := parseOptions()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	cfg := config.Load()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	if err := run(ctx, stop, config.Load(), opts, logger); err != nil {
+		logger.Error("run app", "err", err)
+		os.Exit(1)
+	}
+}
 
+func parseOptions() runOptions {
+	migrateOnly := flag.Bool("migrate-only", false, "run database migrations and exit")
+	seedOnly := flag.Bool("seed-only", false, "run seed tasks and exit")
+	flag.Parse()
+	return runOptions{migrateOnly: *migrateOnly, seedOnly: *seedOnly}
+}
+
+func run(ctx context.Context, stop context.CancelFunc, cfg config.Config, opts runOptions, logger *slog.Logger) error {
 	db, err := postgres.Open(ctx, cfg.PostgresURL)
 	if err != nil {
-		logger.Error("open postgres", "err", err)
-		os.Exit(1)
+		return fmt.Errorf("open postgres: %w", err)
 	}
 	defer db.Close()
 
 	if err := postgres.Migrate(ctx, db); err != nil {
-		logger.Error("migrate postgres", "err", err)
-		os.Exit(1)
+		return fmt.Errorf("migrate postgres: %w", err)
 	}
-	if *migrateOnly || *seedOnly {
-		return
+	if opts.migrateOnly {
+		logger.Info("postgres migrations complete")
+		return nil
+	}
+	if opts.seedOnly {
+		logger.Info("seed requested; no seed tasks are currently defined")
+		return nil
 	}
 
-	orisunStore, err := eventstore.StartEmbeddedOrisun(ctx, eventstore.EmbeddedConfig{
+	orisunStore, err := startEventStore(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	defer orisunStore.Close(context.Background())
+
+	bus, err := natsbus.FromConn(orisunStore.NATSConnection())
+	if err != nil {
+		return fmt.Errorf("borrow embedded orisun nats: %w", err)
+	}
+	defer bus.Close()
+
+	viewStore := newViewStore(bus, logger)
+	components := newAppComponents(db, orisunStore, bus, cfg, logger)
+	handlers, err := startEventHandlers(ctx, eventHandlerFactories(orisunStore, bus, cfg, components, logger))
+	if err != nil {
+		return err
+	}
+	defer stopEventHandlers(handlers)
+
+	app := httpui.Server{
+		Auth:        components.authService,
+		Todos:       components.todoService,
+		Profile:     components.profileService,
+		Subscriber:  bus,
+		ViewStore:   viewStore,
+		Development: cfg.DevelopmentCookie,
+	}
+	return serveHTTP(ctx, stop, cfg.Port, app.Routes(), logger)
+}
+
+func startEventStore(ctx context.Context, cfg config.Config) (*eventstore.EmbeddedOrisun, error) {
+	store, err := eventstore.StartEmbeddedOrisun(ctx, eventstore.EmbeddedConfig{
 		Boundary:         cfg.OrisunBoundary,
 		PostgresHost:     cfg.PostgresHost,
 		PostgresPort:     cfg.PostgresPort,
@@ -62,113 +134,115 @@ func main() {
 		LogLevel:         "info",
 	})
 	if err != nil {
-		logger.Error("start embedded orisun", "err", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("start embedded orisun: %w", err)
 	}
-	defer orisunStore.Close(context.Background())
-	if err := orisunStore.EnsureBoundaryIndexes(ctx, eventcatalog.BoundaryIndexes()); err != nil {
-		logger.Error("ensure orisun indexes", "err", err)
-		os.Exit(1)
+	if err := store.EnsureBoundaryIndexes(ctx, eventcatalog.BoundaryIndexes()); err != nil {
+		store.Close(context.Background())
+		return nil, fmt.Errorf("ensure orisun indexes: %w", err)
 	}
+	return store, nil
+}
 
-	bus, err := natsbus.FromConn(orisunStore.NATSConnection())
+func newViewStore(bus *natsbus.Bus, logger *slog.Logger) viewstore.Store {
+	store, err := viewstore.NewNATSStore(bus.Conn(), "go-starter-view-state", 5*time.Minute)
 	if err != nil {
-		logger.Error("borrow embedded orisun nats", "err", err)
-		os.Exit(1)
+		logger.Warn("using in-memory view store fallback", "err", err)
+		return viewstore.NewMemoryStore()
 	}
-	defer bus.Close()
+	return store
+}
 
-	storageProvider := storage.NewLocalProvider(cfg.UploadDir, cfg.UploadBaseURL)
-	emailSender := email.LogSender{Logger: logger}
-	authService := auth.NewService(db, orisunStore, orisunStore, !cfg.DevelopmentCookie)
+func newAppComponents(db *pgxpool.Pool, store *eventstore.EmbeddedOrisun, bus *natsbus.Bus, cfg config.Config, logger *slog.Logger) appComponents {
+	authService := auth.NewService(db, store, store, !cfg.DevelopmentCookie)
 	todoReadModel := todo.NewReadModel(db)
-	todoService := todo.NewService(todoReadModel, orisunStore, orisunStore, bus)
 	profileReadModel := profile.NewReadModel(db)
-	profileService := profile.NewService(orisunStore, storageProvider)
 
-	checkpointer := eventstore.NewPostgresCheckpointer(db)
-	registrationOTPEventHandler, err := auth.NewRegistrationOTPToBeGeneratedEventHandler(orisunStore, checkpointer, authService, logger)
-	if err != nil {
-		logger.Error("create registration OTP event handler", "err", err)
-		os.Exit(1)
+	return appComponents{
+		authService:      authService,
+		todoService:      todo.NewService(todoReadModel, store, store, bus),
+		profileService:   profile.NewService(store, storage.NewLocalProvider(cfg.UploadDir, cfg.UploadBaseURL)),
+		todoReadModel:    todoReadModel,
+		profileReadModel: profileReadModel,
+		checkpointer:     eventstore.NewPostgresCheckpointer(db),
+		emailSender:      email.LogSender{Logger: logger},
 	}
-	if err := registrationOTPEventHandler.StartSubscribing(ctx); err != nil {
-		logger.Error("start registration OTP event handler", "err", err)
-		os.Exit(1)
-	}
-	defer registrationOTPEventHandler.StopSubscribing()
+}
 
-	emailValidationOTPEventHandler, err := auth.NewEmailValidationOTPToBeSentEventHandler(orisunStore, checkpointer, orisunStore, orisunStore, emailSender, logger)
-	if err != nil {
-		logger.Error("create email validation OTP event handler", "err", err)
-		os.Exit(1)
+func eventHandlerFactories(store *eventstore.EmbeddedOrisun, bus *natsbus.Bus, cfg config.Config, components appComponents, logger *slog.Logger) []eventHandlerFactory {
+	return []eventHandlerFactory{
+		{
+			name: "registration OTP",
+			create: func() (eventHandler, error) {
+				return auth.NewRegistrationOTPToBeGeneratedEventHandler(store, components.checkpointer, components.authService, logger)
+			},
+		},
+		{
+			name: "email validation OTP",
+			create: func() (eventHandler, error) {
+				return auth.NewEmailValidationOTPToBeSentEventHandler(store, components.checkpointer, store, store, components.emailSender, logger)
+			},
+		},
+		{
+			name: "password reset email",
+			create: func() (eventHandler, error) {
+				return auth.NewPasswordResetEmailToBeSentEventHandler(store, components.checkpointer, store, store, components.emailSender, cfg.AppURL, logger)
+			},
+		},
+		{
+			name: "auth user projection",
+			create: func() (eventHandler, error) {
+				return auth.NewAuthUserProjectionEventHandler(store, components.checkpointer, store, components.authService, logger)
+			},
+		},
+		{
+			name: "profile read model",
+			create: func() (eventHandler, error) {
+				return profile.NewReadModelEventHandler(store, components.checkpointer, components.profileReadModel, logger)
+			},
+		},
+		{
+			name: "profile image auth user bridge",
+			create: func() (eventHandler, error) {
+				return profile.NewProfileImageUploadedAuthUserEventHandler(store, components.checkpointer, components.authService, logger)
+			},
+		},
+		{
+			name: "todo read model",
+			create: func() (eventHandler, error) {
+				return todo.NewTodoReadModelEventHandler(store, components.checkpointer, components.todoReadModel, bus, logger)
+			},
+		},
 	}
-	if err := emailValidationOTPEventHandler.StartSubscribing(ctx); err != nil {
-		logger.Error("start email validation OTP event handler", "err", err)
-		os.Exit(1)
-	}
-	defer emailValidationOTPEventHandler.StopSubscribing()
+}
 
-	passwordResetEmailEventHandler, err := auth.NewPasswordResetEmailToBeSentEventHandler(orisunStore, checkpointer, orisunStore, orisunStore, emailSender, cfg.AppURL, logger)
-	if err != nil {
-		logger.Error("create password reset email event handler", "err", err)
-		os.Exit(1)
+func startEventHandlers(ctx context.Context, factories []eventHandlerFactory) ([]eventHandler, error) {
+	handlers := make([]eventHandler, 0, len(factories))
+	for _, factory := range factories {
+		handler, err := factory.create()
+		if err != nil {
+			stopEventHandlers(handlers)
+			return nil, fmt.Errorf("create %s event handler: %w", factory.name, err)
+		}
+		if err := handler.StartSubscribing(ctx); err != nil {
+			stopEventHandlers(append(handlers, handler))
+			return nil, fmt.Errorf("start %s event handler: %w", factory.name, err)
+		}
+		handlers = append(handlers, handler)
 	}
-	if err := passwordResetEmailEventHandler.StartSubscribing(ctx); err != nil {
-		logger.Error("start password reset email event handler", "err", err)
-		os.Exit(1)
-	}
-	defer passwordResetEmailEventHandler.StopSubscribing()
+	return handlers, nil
+}
 
-	authUserProjectionEventHandler, err := auth.NewAuthUserProjectionEventHandler(orisunStore, checkpointer, orisunStore, authService, logger)
-	if err != nil {
-		logger.Error("create auth user projection event handler", "err", err)
-		os.Exit(1)
+func stopEventHandlers(handlers []eventHandler) {
+	for i := len(handlers) - 1; i >= 0; i-- {
+		handlers[i].StopSubscribing()
 	}
-	if err := authUserProjectionEventHandler.StartSubscribing(ctx); err != nil {
-		logger.Error("start auth user projection event handler", "err", err)
-		os.Exit(1)
-	}
-	defer authUserProjectionEventHandler.StopSubscribing()
+}
 
-	profileReadModelEventHandler, err := profile.NewReadModelEventHandler(orisunStore, checkpointer, profileReadModel, logger)
-	if err != nil {
-		logger.Error("create profile read model event handler", "err", err)
-		os.Exit(1)
-	}
-	if err := profileReadModelEventHandler.StartSubscribing(ctx); err != nil {
-		logger.Error("start profile read model event handler", "err", err)
-		os.Exit(1)
-	}
-	defer profileReadModelEventHandler.StopSubscribing()
-
-	profileImageUploadedAuthUserEventHandler, err := profile.NewProfileImageUploadedAuthUserEventHandler(orisunStore, checkpointer, authService, logger)
-	if err != nil {
-		logger.Error("create profile image uploaded auth user event handler", "err", err)
-		os.Exit(1)
-	}
-	if err := profileImageUploadedAuthUserEventHandler.StartSubscribing(ctx); err != nil {
-		logger.Error("start profile image uploaded auth user event handler", "err", err)
-		os.Exit(1)
-	}
-	defer profileImageUploadedAuthUserEventHandler.StopSubscribing()
-
-	todoReadModelEventHandler, err := todo.NewTodoReadModelEventHandler(orisunStore, checkpointer, todoReadModel, bus, logger)
-	if err != nil {
-		logger.Error("create todo read model event handler", "err", err)
-		os.Exit(1)
-	}
-	if err := todoReadModelEventHandler.StartSubscribing(ctx); err != nil {
-		logger.Error("start todo read model event handler", "err", err)
-		os.Exit(1)
-	}
-	defer todoReadModelEventHandler.StopSubscribing()
-
-	app := httpui.Server{Auth: authService, Todos: todoService, Profile: profileService, Subscriber: bus, Development: cfg.DevelopmentCookie}
-	server := &http.Server{Addr: ":" + cfg.Port, Handler: app.Routes(), ReadHeaderTimeout: 5 * time.Second}
+func serveHTTP(ctx context.Context, stop context.CancelFunc, port string, handler http.Handler, logger *slog.Logger) error {
+	server := &http.Server{Addr: ":" + port, Handler: handler, ReadHeaderTimeout: 5 * time.Second}
 	go func() {
-		logger.Info("starting server", "addr", "http://localhost:"+cfg.Port)
-		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		logger.Info("starting server", "addr", "http://localhost:"+port)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Error("server failed", "err", err)
 			stop()
 		}
@@ -177,5 +251,8 @@ func main() {
 	<-ctx.Done()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	_ = server.Shutdown(shutdownCtx)
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		return fmt.Errorf("shutdown server: %w", err)
+	}
+	return nil
 }

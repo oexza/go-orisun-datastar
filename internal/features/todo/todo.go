@@ -26,8 +26,8 @@ func (s *Service) List(ctx context.Context, userRegisteredID string) ([]views.To
 	return s.readModel.List(ctx, userRegisteredID)
 }
 
-func (s *Service) Create(ctx context.Context, userRegisteredID, title string) (string, error) {
-	return s.CreateWithMetadata(ctx, userRegisteredID, title, nil)
+func (s *Service) Create(ctx context.Context, userRegisteredID, title string, metadata ...CommandMetadata) (string, error) {
+	return s.CreateWithMetadata(ctx, userRegisteredID, title, firstMetadata(metadata))
 }
 
 func (s *Service) CreateWithMetadata(ctx context.Context, userRegisteredID, title string, metadata CommandMetadata) (string, error) {
@@ -39,8 +39,8 @@ func (s *Service) CreateWithMetadata(ctx context.Context, userRegisteredID, titl
 	return result.TodoID, err
 }
 
-func (s *Service) Rename(ctx context.Context, userRegisteredID, todoID, title string) error {
-	return s.RenameWithMetadata(ctx, userRegisteredID, todoID, title, nil)
+func (s *Service) Rename(ctx context.Context, userRegisteredID, todoID, title string, metadata ...CommandMetadata) error {
+	return s.RenameWithMetadata(ctx, userRegisteredID, todoID, title, firstMetadata(metadata))
 }
 
 func (s *Service) RenameWithMetadata(ctx context.Context, userRegisteredID, todoID, title string, metadata CommandMetadata) error {
@@ -53,8 +53,8 @@ func (s *Service) RenameWithMetadata(ctx context.Context, userRegisteredID, todo
 	return err
 }
 
-func (s *Service) Complete(ctx context.Context, userRegisteredID, todoID string) error {
-	return s.CompleteWithMetadata(ctx, userRegisteredID, todoID, nil)
+func (s *Service) Complete(ctx context.Context, userRegisteredID, todoID string, metadata ...CommandMetadata) error {
+	return s.CompleteWithMetadata(ctx, userRegisteredID, todoID, firstMetadata(metadata))
 }
 
 func (s *Service) CompleteWithMetadata(ctx context.Context, userRegisteredID, todoID string, metadata CommandMetadata) error {
@@ -66,8 +66,8 @@ func (s *Service) CompleteWithMetadata(ctx context.Context, userRegisteredID, to
 	return err
 }
 
-func (s *Service) Reopen(ctx context.Context, userRegisteredID, todoID string) error {
-	return s.ReopenWithMetadata(ctx, userRegisteredID, todoID, nil)
+func (s *Service) Reopen(ctx context.Context, userRegisteredID, todoID string, metadata ...CommandMetadata) error {
+	return s.ReopenWithMetadata(ctx, userRegisteredID, todoID, firstMetadata(metadata))
 }
 
 func (s *Service) ReopenWithMetadata(ctx context.Context, userRegisteredID, todoID string, metadata CommandMetadata) error {
@@ -79,8 +79,8 @@ func (s *Service) ReopenWithMetadata(ctx context.Context, userRegisteredID, todo
 	return err
 }
 
-func (s *Service) Delete(ctx context.Context, userRegisteredID, todoID string) error {
-	return s.DeleteWithMetadata(ctx, userRegisteredID, todoID, nil)
+func (s *Service) Delete(ctx context.Context, userRegisteredID, todoID string, metadata ...CommandMetadata) error {
+	return s.DeleteWithMetadata(ctx, userRegisteredID, todoID, firstMetadata(metadata))
 }
 
 func (s *Service) DeleteWithMetadata(ctx context.Context, userRegisteredID, todoID string, metadata CommandMetadata) error {
@@ -90,4 +90,71 @@ func (s *Service) DeleteWithMetadata(ctx context.Context, userRegisteredID, todo
 		Metadata:         metadata,
 	}, s.saver, s.retriever)
 	return err
+}
+
+func (s *Service) CompleteAllActive(ctx context.Context, userRegisteredID string, metadata ...CommandMetadata) error {
+	return s.CompleteAllActiveWithMetadata(ctx, userRegisteredID, firstMetadata(metadata))
+}
+
+func (s *Service) CompleteAllActiveWithMetadata(ctx context.Context, userRegisteredID string, metadata CommandMetadata) error {
+	todos, err := s.readModel.List(ctx, userRegisteredID)
+	if err != nil {
+		return err
+	}
+	for _, item := range todos {
+		if item.Completed {
+			continue
+		}
+		if err := s.CompleteWithMetadata(ctx, userRegisteredID, item.TodoID, metadata); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) ReopenAllCompleted(ctx context.Context, userRegisteredID string, metadata ...CommandMetadata) error {
+	return s.ReopenAllCompletedWithMetadata(ctx, userRegisteredID, firstMetadata(metadata))
+}
+
+func (s *Service) ReopenAllCompletedWithMetadata(ctx context.Context, userRegisteredID string, metadata CommandMetadata) error {
+	todos, err := s.readModel.List(ctx, userRegisteredID)
+	if err != nil {
+		return err
+	}
+	for _, item := range todos {
+		if !item.Completed {
+			continue
+		}
+		if err := s.ReopenWithMetadata(ctx, userRegisteredID, item.TodoID, metadata); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) ClearCompleted(ctx context.Context, userRegisteredID string, metadata ...CommandMetadata) error {
+	return s.ClearCompletedWithMetadata(ctx, userRegisteredID, firstMetadata(metadata))
+}
+
+func (s *Service) ClearCompletedWithMetadata(ctx context.Context, userRegisteredID string, metadata CommandMetadata) error {
+	todos, err := s.readModel.List(ctx, userRegisteredID)
+	if err != nil {
+		return err
+	}
+	for _, item := range todos {
+		if !item.Completed {
+			continue
+		}
+		if err := s.DeleteWithMetadata(ctx, userRegisteredID, item.TodoID, metadata); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func firstMetadata(metadata []CommandMetadata) CommandMetadata {
+	if len(metadata) == 0 || metadata[0] == nil {
+		return CommandMetadata{}
+	}
+	return metadata[0]
 }

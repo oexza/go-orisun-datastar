@@ -19,7 +19,10 @@ type Position struct {
 	Prepare int64 `json:"preparePosition"`
 }
 
-var NoEventPosition = Position{Commit: -1, Prepare: -1}
+var (
+	NoEventPosition   = Position{Commit: -1, Prepare: -1}
+	LastEventPosition = Position{Commit: 1<<63 - 1, Prepare: 1<<63 - 1}
+)
 
 func (p Position) After(other Position) bool {
 	if p.Commit != other.Commit {

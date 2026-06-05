@@ -15,7 +15,7 @@ templ Base(title string) {
 			<script type="module" src={ resources.StaticPath("datastar.js") }></script>
 			<link rel="stylesheet" href={ resources.StaticPath("style.css") }/>
 		</head>
-		<body class="min-h-svh bg-base-200 text-base-content">
+		<body>
 			if isDevelopment() {
 				<div data-init={ hotReloadSSE() }></div>
 			}
@@ -32,16 +32,19 @@ templ Base(title string) {
 templ AppNav(user User, active string) {
 	<nav class="app-nav navbar">
 		<div class="navbar-start">
-			<a class="btn btn-ghost gap-3 px-2 text-base font-bold" href="/todos">
+			<a class="brand-link" href="/todos" aria-label="Go-Orisun-Datastar todos">
 				<span class="brand-mark">G</span>
-				<span>Go Event Starter</span>
+				<span class="brand-copy">
+					<span class="brand-title">Go-Orisun-Datastar</span>
+					<span class="brand-subtitle">Event-sourced starter</span>
+				</span>
 			</a>
 		</div>
-		<div class="navbar-end gap-2">
-			<div class="menu menu-horizontal hidden gap-1 rounded-box bg-base-200/60 p-1 sm:flex">
-				<a class={ "btn btn-sm", templ.KV("btn-primary", active == "todos"), templ.KV("btn-ghost", active != "todos") } href="/todos">Todos</a>
-				<a class={ "btn btn-sm", templ.KV("btn-primary", active == "profile"), templ.KV("btn-ghost", active != "profile") } href="/profile">Profile</a>
-				<a class={ "btn btn-sm", templ.KV("btn-primary", active == "settings"), templ.KV("btn-ghost", active != "settings") } href="/profile/settings">Settings</a>
+		<div class="navbar-end nav-actions">
+			<div class="nav-tabs hidden sm:flex">
+				<a class={ "nav-tab", templ.KV("active", active == "todos") } href="/todos">Todos</a>
+				<a class={ "nav-tab", templ.KV("active", active == "profile") } href="/profile">Profile</a>
+				<a class={ "nav-tab", templ.KV("active", active == "settings") } href="/profile/settings">Settings</a>
 			</div>
 			<div class="avatar placeholder hidden sm:flex">
 				if user.Image != "" {
@@ -55,7 +58,7 @@ templ AppNav(user User, active string) {
 				}
 			</div>
 			<form method="post" action="/logout">
-				<button class="btn btn-neutral btn-sm">Logout</button>
+				<button class="btn btn-outline btn-sm">Logout</button>
 			</form>
 		</div>
 	</nav>
@@ -63,18 +66,29 @@ templ AppNav(user User, active string) {
 
 templ AuthForm(action string, title string, fields []Field, errors map[string]string) {
 	<main id="auth-page" class="auth-layout">
+		<section class="auth-intro">
+			<a class="brand-link brand-link-large" href="/login">
+				<span class="brand-mark">G</span>
+				<span class="brand-copy">
+					<span class="brand-title">Go-Orisun-Datastar</span>
+					<span class="brand-subtitle">Orisun events, Datastar UI</span>
+				</span>
+			</a>
+			<h1>Server-rendered flows that stay fast and auditable.</h1>
+			<p>Commands append events, handlers project state, and Datastar streams the small UI changes that matter.</p>
+		</section>
 		<section class="auth-card card">
-			<div class="card-body gap-5">
-				<div class="grid gap-2 text-center">
-					<div class="mx-auto brand-mark">G</div>
-					<h1 class="text-3xl font-bold">{ title }</h1>
+			<div class="card-body">
+				<div class="form-header">
+					<p class="eyebrow">Account</p>
+					<h2>{ title }</h2>
 				</div>
 				if errors != nil && errors["error"] != "" {
 					<div class="alert alert-error alert-soft">{ errors["error"] }</div>
 				}
 				<form class="auth-form" method="post" action={ action } data-on:submit={ postFormSSE(action) }>
 					for _, field := range fields {
-						<label class="grid gap-1">
+						<label class="form-field">
 							<span class="font-semibold">{ field.Label }</span>
 							<input class={ "input w-full", templ.KV("input-error", errors != nil && errors[field.Name] != "") } name={ field.Name } type={ field.Type } required/>
 						</label>
@@ -82,7 +96,7 @@ templ AuthForm(action string, title string, fields []Field, errors map[string]st
 							<small class="text-error">{ errors[field.Name] }</small>
 						}
 					}
-					<button class="btn btn-primary" type="submit">{ title }</button>
+					<button class="btn btn-primary w-full" type="submit">{ title }</button>
 				</form>
 				<div class="auth-links">
 					{ children... }

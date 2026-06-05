@@ -16,17 +16,23 @@ import (
 	"github.com/oexza/go-orisun-datastar/internal/features/todo"
 	"github.com/oexza/go-orisun-datastar/internal/resources"
 	"github.com/oexza/go-orisun-datastar/internal/views"
+	"github.com/oexza/go-orisun-datastar/internal/viewstore"
 )
 
 type contextKey string
 
 const userKey contextKey = "user"
 
+type MessageSubscriber interface {
+	Subscribe(ctx context.Context, subject string, handle func(context.Context, []byte)) (eventstore.MessageSubscription, error)
+}
+
 type Server struct {
 	Auth        *auth.Service
 	Todos       *todo.Service
 	Profile     *profile.Service
-	Subscriber  eventstore.MessageSubscriber
+	Subscriber  MessageSubscriber
+	ViewStore   viewstore.Store
 	Development bool
 }
 
@@ -87,4 +93,12 @@ func (s Server) requireVerifiedEmail(next http.Handler) http.Handler {
 func currentUser(r *http.Request) views.User {
 	user, _ := r.Context().Value(userKey).(views.User)
 	return user
+}
+
+func (s Server) sessionID(r *http.Request) string {
+	cookie, err := r.Cookie(s.Auth.SessionCookieName())
+	if err == nil && cookie.Value != "" {
+		return cookie.Value
+	}
+	return currentUser(r).UserRegisteredID
 }

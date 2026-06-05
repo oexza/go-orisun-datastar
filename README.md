@@ -94,6 +94,8 @@ The `sqlite` branch replaces the Postgres-specific variables with `SQLITE_PATH` 
 
 All business changes are written as Orisun events. Feature services append events, event handlers project those events into read models, and HTTP/SSE handlers render UI from the read models.
 
+The UI flow uses [the Tao of Datastar](https://data-star.dev/guide/the_tao_of_datastar) as a reference: keep state on the backend, render templ fragments on the server, patch elements or sparse signals over SSE, and use redirects or normal anchors for navigation.
+
 Typical write flow:
 
 1. A chi handler parses input and builds command metadata.

@@ -11,16 +11,15 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
-	"github.com/oexza/go-orisun-datastar/internal/storage"
 	"github.com/oexza/go-orisun-datastar/internal/views"
 )
 
 type Service struct {
 	store   eventstore.Saver
-	storage storage.Provider
+	storage ObjectStore
 }
 
-func NewService(store eventstore.Saver, storage storage.Provider) *Service {
+func NewService(store eventstore.Saver, storage ObjectStore) *Service {
 	return &Service{store: store, storage: storage}
 }
 

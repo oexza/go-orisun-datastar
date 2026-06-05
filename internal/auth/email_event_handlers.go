@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/oexza/go-orisun-datastar/internal/email"
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
 )
 
@@ -17,10 +16,10 @@ type EmailValidationOTPToBeSentEventHandler struct {
 	global    *eventstore.GlobalEventHandler
 	retriever eventstore.Retriever
 	saver     eventstore.Saver
-	sender    email.Sender
+	sender    EmailSender
 }
 
-func NewEmailValidationOTPToBeSentEventHandler(subscriber eventstore.Subscriber, checkpointer eventstore.Checkpointer, retriever eventstore.Retriever, saver eventstore.Saver, sender email.Sender, logger *slog.Logger) (*EmailValidationOTPToBeSentEventHandler, error) {
+func NewEmailValidationOTPToBeSentEventHandler(subscriber eventstore.Subscriber, checkpointer eventstore.Checkpointer, retriever eventstore.Retriever, saver eventstore.Saver, sender EmailSender, logger *slog.Logger) (*EmailValidationOTPToBeSentEventHandler, error) {
 	handler := &EmailValidationOTPToBeSentEventHandler{retriever: retriever, saver: saver, sender: sender}
 	global, err := eventstore.NewGlobalEventHandler(eventstore.GlobalEventHandlerConfig{
 		Subscriber:      subscriber,
@@ -63,11 +62,11 @@ type PasswordResetEmailToBeSentEventHandler struct {
 	global    *eventstore.GlobalEventHandler
 	retriever eventstore.Retriever
 	saver     eventstore.Saver
-	sender    email.Sender
+	sender    EmailSender
 	appURL    string
 }
 
-func NewPasswordResetEmailToBeSentEventHandler(subscriber eventstore.Subscriber, checkpointer eventstore.Checkpointer, retriever eventstore.Retriever, saver eventstore.Saver, sender email.Sender, appURL string, logger *slog.Logger) (*PasswordResetEmailToBeSentEventHandler, error) {
+func NewPasswordResetEmailToBeSentEventHandler(subscriber eventstore.Subscriber, checkpointer eventstore.Checkpointer, retriever eventstore.Retriever, saver eventstore.Saver, sender EmailSender, appURL string, logger *slog.Logger) (*PasswordResetEmailToBeSentEventHandler, error) {
 	handler := &PasswordResetEmailToBeSentEventHandler{retriever: retriever, saver: saver, sender: sender, appURL: appURL}
 	global, err := eventstore.NewGlobalEventHandler(eventstore.GlobalEventHandlerConfig{
 		Subscriber:      subscriber,
