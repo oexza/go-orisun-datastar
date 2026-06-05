@@ -39,7 +39,7 @@ func (s Server) updateBio(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 	err := s.Profile.UpdateBioWithMetadata(r.Context(), user, r.FormValue("bio"), eventstore.HTTPCommandMetadata(r, user.UserRegisteredID))
 	if err != nil {
-		_ = views.ProfileEdit(user, map[string]string{"bio": err.Error()}).Render(r.Context(), w)
+		patchTempl(w, r, views.ProfileEditPanel(user, map[string]string{"bio": err.Error()}), datastar.WithSelectorID("profile-edit-page"))
 		return
 	}
 	writeSSE(w, r, func(sse *datastar.ServerSentEventGenerator) error { return sse.Redirect("/profile") })
