@@ -8,6 +8,7 @@ import (
 	"github.com/starfederation/datastar-go/datastar"
 
 	"github.com/example/hono-event-starter-go/internal/auth"
+	"github.com/example/hono-event-starter-go/internal/eventstore"
 	"github.com/example/hono-event-starter-go/internal/views"
 )
 
@@ -39,6 +40,7 @@ func (s Server) register(w http.ResponseWriter, r *http.Request) {
 	user, err := s.Auth.Register(r.Context(), auth.RegisterInput{
 		Username: r.FormValue("username"), Email: r.FormValue("email"), Password: r.FormValue("password"),
 		FirstName: r.FormValue("firstName"), LastName: r.FormValue("lastName"), YearOfBirth: year,
+		Metadata: eventstore.HTTPCommandMetadata(r, ""),
 	})
 	if err != nil {
 		_ = views.Register(map[string]string{"error": err.Error()}).Render(r.Context(), w)
@@ -77,14 +79,14 @@ func (s Server) logout(w http.ResponseWriter, r *http.Request) {
 
 func (s Server) forgotPassword(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
-	_ = s.Auth.RequestPasswordReset(r.Context(), r.FormValue("email"))
+	_ = s.Auth.RequestPasswordResetWithMetadata(r.Context(), r.FormValue("email"), eventstore.HTTPCommandMetadata(r, ""))
 	writeSSE(w, r, func(sse *datastar.ServerSentEventGenerator) error { return sse.Redirect("/login") })
 }
 
 func (s Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	token := chi.URLParam(r, "token")
-	if err := s.Auth.ResetPassword(r.Context(), token, r.FormValue("password")); err != nil {
+	if err := s.Auth.ResetPasswordWithMetadata(r.Context(), token, r.FormValue("password"), eventstore.HTTPCommandMetadata(r, "")); err != nil {
 		_ = views.ResetPassword(token, map[string]string{"error": err.Error()}).Render(r.Context(), w)
 		return
 	}
@@ -94,7 +96,7 @@ func (s Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 func (s Server) validateEmail(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	userID := chi.URLParam(r, "userID")
-	if err := s.Auth.ValidateOTP(r.Context(), userID, r.FormValue("otp")); err != nil {
+	if err := s.Auth.ValidateOTPWithMetadata(r.Context(), userID, r.FormValue("otp"), eventstore.HTTPCommandMetadata(r, "")); err != nil {
 		_ = views.ValidateEmail(userID, map[string]string{"error": err.Error()}).Render(r.Context(), w)
 		return
 	}
@@ -105,7 +107,7 @@ func (s Server) sendOTP(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "userID")
 	user, err := s.Auth.UserByIDOrRegisteredID(r.Context(), userID)
 	if err == nil {
-		_ = s.Auth.GenerateEmailVerificationOTP(r.Context(), user)
+		_ = s.Auth.GenerateEmailVerificationOTPWithMetadata(r.Context(), user, eventstore.HTTPCommandMetadata(r, user.UserRegisteredID))
 	}
 	writeSSE(w, r, func(sse *datastar.ServerSentEventGenerator) error {
 		return sse.Redirect("/register/" + userID + "/validate-email")

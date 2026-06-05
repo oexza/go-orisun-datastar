@@ -11,7 +11,7 @@ import (
 	"github.com/example/hono-event-starter-go/internal/eventstore"
 )
 
-type CommandMetadata map[string]any
+type CommandMetadata = eventstore.CommandMetadata
 
 type CreateTodoCommand struct {
 	UserRegisteredID string
@@ -31,18 +31,7 @@ func CreateTodoCommandHandler(ctx context.Context, command CreateTodoCommand, sa
 
 	todoID := uuid.NewString()
 	query := streamQuery(todoID, command.UserRegisteredID)
-	event := eventstore.DomainEvent{
-		EventID:   todoID,
-		EventType: TodoCreated,
-		Data: map[string]any{
-			"todoId":           todoID,
-			"userRegisteredId": command.UserRegisteredID,
-			"title":            title,
-			"createdAt":        time.Now().Format(time.RFC3339),
-			"scope":            todoScope(todoID, command.UserRegisteredID),
-		},
-		Metadata: metadataWithQuery(command.Metadata, query),
-	}
+	event := NewTodoCreatedEvent(todoID, command.UserRegisteredID, title, time.Now(), metadataWithQuery(command.Metadata, query))
 
 	if _, err := saver.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, query); err != nil {
 		return CreateTodoResult{}, err
@@ -81,17 +70,7 @@ func RenameTodoCommandHandler(ctx context.Context, command RenameTodoCommand, sa
 
 	query := streamQuery(command.TodoID, command.UserRegisteredID)
 	eventID := uuid.NewString()
-	event := eventstore.DomainEvent{
-		EventID:   eventID,
-		EventType: TodoRenamed,
-		Data: map[string]any{
-			"todoRenamedId": eventID,
-			"title":         title,
-			"renamedAt":     time.Now().Format(time.RFC3339),
-			"scope":         todoScope(command.TodoID, command.UserRegisteredID),
-		},
-		Metadata: metadataWithQuery(command.Metadata, query),
-	}
+	event := NewTodoRenamedEvent(eventID, command.TodoID, command.UserRegisteredID, title, time.Now(), metadataWithQuery(command.Metadata, query))
 
 	if _, err := saver.SaveEvents(ctx, []eventstore.DomainEvent{event}, model.position, model.events, query); err != nil {
 		return RenameTodoResult{}, err
@@ -168,16 +147,7 @@ func DeleteTodoCommandHandler(ctx context.Context, command DeleteTodoCommand, sa
 
 	query := streamQuery(command.TodoID, command.UserRegisteredID)
 	eventID := uuid.NewString()
-	event := eventstore.DomainEvent{
-		EventID:   eventID,
-		EventType: TodoDeleted,
-		Data: map[string]any{
-			"todoDeletedId": eventID,
-			"deletedAt":     time.Now().Format(time.RFC3339),
-			"scope":         todoScope(command.TodoID, command.UserRegisteredID),
-		},
-		Metadata: metadataWithQuery(command.Metadata, query),
-	}
+	event := NewTodoDeletedEvent(eventID, command.TodoID, command.UserRegisteredID, time.Now(), metadataWithQuery(command.Metadata, query))
 
 	if _, err := saver.SaveEvents(ctx, []eventstore.DomainEvent{event}, model.position, model.events, query); err != nil {
 		return DeleteTodoResult{}, err
@@ -209,27 +179,14 @@ func changeTodoCompletion(ctx context.Context, command changeTodoCompletionComma
 		return changeTodoCompletionResult{skipped: true}, nil
 	}
 
-	eventType := TodoReopened
-	timeField := "reopenedAt"
-	idField := "todoReopenedId"
+	newEvent := NewTodoReopenedEvent
 	if command.complete {
-		eventType = TodoCompleted
-		timeField = "completedAt"
-		idField = "todoCompletedId"
+		newEvent = NewTodoCompletedEvent
 	}
 
 	query := streamQuery(command.todoID, command.userRegisteredID)
 	eventID := uuid.NewString()
-	event := eventstore.DomainEvent{
-		EventID:   eventID,
-		EventType: eventType,
-		Data: map[string]any{
-			idField:   eventID,
-			timeField: time.Now().Format(time.RFC3339),
-			"scope":   todoScope(command.todoID, command.userRegisteredID),
-		},
-		Metadata: metadataWithQuery(command.metadata, query),
-	}
+	event := newEvent(eventID, command.todoID, command.userRegisteredID, time.Now(), metadataWithQuery(command.metadata, query))
 
 	if _, err := saver.SaveEvents(ctx, []eventstore.DomainEvent{event}, model.position, model.events, query); err != nil {
 		return changeTodoCompletionResult{}, err
@@ -301,15 +258,11 @@ func streamQuery(todoID, userRegisteredID string) eventstore.Query {
 	for _, eventType := range []string{TodoCreated, TodoRenamed, TodoCompleted, TodoReopened, TodoDeleted} {
 		criteria = append(criteria, eventstore.Criterion{Tags: []eventstore.Tag{
 			{Key: "eventType", Value: eventType},
-			{Key: "scope.todoId", Value: todoID},
-			{Key: "scope.userRegisteredId", Value: userRegisteredID},
+			{Key: TodoScopeIDField, Value: todoID},
+			{Key: TodoScopeUserRegisteredIDField, Value: userRegisteredID},
 		}})
 	}
 	return eventstore.Query{Criteria: criteria}
-}
-
-func todoScope(todoID, userRegisteredID string) map[string]any {
-	return map[string]any{"todoId": todoID, "userRegisteredId": userRegisteredID}
 }
 
 func metadataWithQuery(metadata CommandMetadata, query eventstore.Query) map[string]any {

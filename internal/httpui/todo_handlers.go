@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/starfederation/datastar-go/datastar"
 
+	"github.com/example/hono-event-starter-go/internal/eventstore"
 	"github.com/example/hono-event-starter-go/internal/features/todo"
 	"github.com/example/hono-event-starter-go/internal/views"
 )
@@ -73,7 +74,8 @@ func (s Server) todosStream(w http.ResponseWriter, r *http.Request) {
 
 func (s Server) createTodo(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
-	_, err := s.Todos.Create(r.Context(), currentUser(r).UserRegisteredID, r.FormValue("title"))
+	user := currentUser(r)
+	_, err := s.Todos.CreateWithMetadata(r.Context(), user.UserRegisteredID, r.FormValue("title"), eventstore.HTTPCommandMetadata(r, user.UserRegisteredID))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -83,17 +85,21 @@ func (s Server) createTodo(w http.ResponseWriter, r *http.Request) {
 
 func (s Server) renameTodo(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
-	emptySSE(w, r, s.Todos.Rename(r.Context(), currentUser(r).UserRegisteredID, chi.URLParam(r, "todoID"), r.FormValue("title")))
+	user := currentUser(r)
+	emptySSE(w, r, s.Todos.RenameWithMetadata(r.Context(), user.UserRegisteredID, chi.URLParam(r, "todoID"), r.FormValue("title"), eventstore.HTTPCommandMetadata(r, user.UserRegisteredID)))
 }
 
 func (s Server) completeTodo(w http.ResponseWriter, r *http.Request) {
-	emptySSE(w, r, s.Todos.Complete(r.Context(), currentUser(r).UserRegisteredID, chi.URLParam(r, "todoID")))
+	user := currentUser(r)
+	emptySSE(w, r, s.Todos.CompleteWithMetadata(r.Context(), user.UserRegisteredID, chi.URLParam(r, "todoID"), eventstore.HTTPCommandMetadata(r, user.UserRegisteredID)))
 }
 
 func (s Server) reopenTodo(w http.ResponseWriter, r *http.Request) {
-	emptySSE(w, r, s.Todos.Reopen(r.Context(), currentUser(r).UserRegisteredID, chi.URLParam(r, "todoID")))
+	user := currentUser(r)
+	emptySSE(w, r, s.Todos.ReopenWithMetadata(r.Context(), user.UserRegisteredID, chi.URLParam(r, "todoID"), eventstore.HTTPCommandMetadata(r, user.UserRegisteredID)))
 }
 
 func (s Server) deleteTodo(w http.ResponseWriter, r *http.Request) {
-	emptySSE(w, r, s.Todos.Delete(r.Context(), currentUser(r).UserRegisteredID, chi.URLParam(r, "todoID")))
+	user := currentUser(r)
+	emptySSE(w, r, s.Todos.DeleteWithMetadata(r.Context(), user.UserRegisteredID, chi.URLParam(r, "todoID"), eventstore.HTTPCommandMetadata(r, user.UserRegisteredID)))
 }

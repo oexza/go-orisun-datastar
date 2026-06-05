@@ -15,12 +15,6 @@ import (
 	"github.com/example/hono-event-starter-go/internal/views"
 )
 
-const (
-	ProfileBioUpdated          = "ProfileBioUpdated"
-	ProfileImageUploaded       = "ProfileImageUploaded"
-	ProfileHeaderImageUploaded = "ProfileHeaderImageUploaded"
-)
-
 type Service struct {
 	store   eventstore.Saver
 	storage storage.Provider
@@ -31,26 +25,25 @@ func NewService(store eventstore.Saver, storage storage.Provider) *Service {
 }
 
 func (s *Service) UpdateBio(ctx context.Context, user views.User, bio string) error {
+	return s.UpdateBioWithMetadata(ctx, user, bio, nil)
+}
+
+func (s *Service) UpdateBioWithMetadata(ctx context.Context, user views.User, bio string, metadata map[string]any) error {
 	bio = strings.TrimSpace(bio)
 	if len(bio) > 280 {
 		return errors.New("bio must be 280 characters or fewer")
 	}
 	eventID := uuid.NewString()
-	event := eventstore.DomainEvent{
-		EventID:   eventID,
-		EventType: ProfileBioUpdated,
-		Data: map[string]any{
-			"profileBioUpdatedId": eventID,
-			"bio":                 bio,
-			"updatedAt":           time.Now().Format(time.RFC3339),
-			"scope":               map[string]any{"userRegisteredId": user.UserRegisteredID},
-		},
-	}
-	_, err := s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, profileEventQuery(ProfileBioUpdated, "profileBioUpdatedId", eventID))
+	event := NewProfileBioUpdatedEvent(eventID, bio, time.Now(), user.UserRegisteredID, metadata)
+	_, err := s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, profileEventQuery(ProfileBioUpdated, ProfileBioUpdatedIDField, eventID))
 	return err
 }
 
 func (s *Service) UploadImage(ctx context.Context, user views.User, data []byte, contentType string, header bool) (string, error) {
+	return s.UploadImageWithMetadata(ctx, user, data, contentType, header, nil)
+}
+
+func (s *Service) UploadImageWithMetadata(ctx context.Context, user views.User, data []byte, contentType string, header bool, metadata map[string]any) (string, error) {
 	if len(data) == 0 {
 		return "", errors.New("missing image")
 	}
@@ -70,19 +63,11 @@ func (s *Service) UploadImage(ctx context.Context, user views.User, data []byte,
 	}
 	url := s.storage.PublicURL(key)
 	eventID := uuid.NewString()
-	idField := "profileImageUploadedId"
+	idField := ProfileImageUploadedIDField
+	event := NewProfileImageUploadedEvent(eventID, url, time.Now(), user.UserRegisteredID, metadata)
 	if header {
-		idField = "profileHeaderImageUploadedId"
-	}
-	event := eventstore.DomainEvent{
-		EventID:   eventID,
-		EventType: eventType,
-		Data: map[string]any{
-			idField:      eventID,
-			"imageUrl":   url,
-			"uploadedAt": time.Now().Format(time.RFC3339),
-			"scope":      map[string]any{"userRegisteredId": user.UserRegisteredID},
-		},
+		idField = ProfileHeaderImageUploadedIDField
+		event = NewProfileHeaderImageUploadedEvent(eventID, url, time.Now(), user.UserRegisteredID, metadata)
 	}
 	if _, err := s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, profileEventQuery(eventType, idField, eventID)); err != nil {
 		return "", err
