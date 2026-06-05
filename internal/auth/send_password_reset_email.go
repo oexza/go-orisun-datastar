@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
 
 	"github.com/oexza/go-orisun-datastar/internal/email"
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
@@ -59,7 +59,7 @@ func SendPasswordResetEmailCommandHandler(ctx context.Context, command SendPassw
 		return err
 	}
 
-	id := uuid.NewString()
+	id := uuidv7.NewString()
 	sent := NewPasswordResetEmailSentEvent(id, time.Now(), command.PasswordResetRequestedID, metadataWithQuery(command.Metadata, combineQueries(requestedQuery, sentQuery)))
 	_, err = saver.SaveEvents(ctx, []eventstore.DomainEvent{sent}, model.position, requestedEvents, combineQueries(requestedQuery, sentQuery))
 	return err

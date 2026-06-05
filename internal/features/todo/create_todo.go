@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
 
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
 )
@@ -25,7 +25,7 @@ func CreateTodoCommandHandler(ctx context.Context, command CreateTodoCommand, sa
 		return CreateTodoResult{}, err
 	}
 
-	todoID := uuid.NewString()
+	todoID := uuidv7.NewString()
 	query := streamQuery(todoID, command.UserRegisteredID)
 	event := NewTodoCreatedEvent(todoID, command.UserRegisteredID, title, time.Now(), metadataWithQuery(command.Metadata, query))
 

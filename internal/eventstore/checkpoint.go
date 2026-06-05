@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oexza/go-orisun-datastar/internal/dbsql"
+	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
 )
 
 type PostgresCheckpointer struct {
@@ -31,7 +31,7 @@ func (c *PostgresCheckpointer) GetCheckpoint(ctx context.Context, name string) (
 
 func (c *PostgresCheckpointer) UpdateCheckpoint(ctx context.Context, name string, position Position) error {
 	return c.queries.UpsertEventHandlerCheckpoint(ctx, dbsql.UpsertEventHandlerCheckpointParams{
-		ID:              uuid.NewString(),
+		ID:              uuidv7.NewString(),
 		Name:            name,
 		CommitPosition:  position.Commit,
 		PreparePosition: position.Prepare,

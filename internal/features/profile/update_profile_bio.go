@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
 
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
 	"github.com/oexza/go-orisun-datastar/internal/views"
@@ -23,7 +23,7 @@ func UpdateProfileBioCommandHandler(ctx context.Context, command UpdateProfileBi
 	if len(bio) > 280 {
 		return errors.New("bio must be 280 characters or fewer")
 	}
-	eventID := uuid.NewString()
+	eventID := uuidv7.NewString()
 	event := NewProfileBioUpdatedEvent(eventID, bio, time.Now(), command.User.UserRegisteredID, command.Metadata)
 	_, err := saver.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, profileEventQuery(ProfileBioUpdated, ProfileBioUpdatedIDField, eventID))
 	return err

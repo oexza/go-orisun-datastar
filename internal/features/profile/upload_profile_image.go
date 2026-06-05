@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
 
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
 	"github.com/oexza/go-orisun-datastar/internal/views"
@@ -39,12 +39,12 @@ func UploadProfileImageCommandHandler(ctx context.Context, command UploadProfile
 		kind = "header"
 		eventType = ProfileHeaderImageUploaded
 	}
-	key := filepath.ToSlash(fmt.Sprintf("profiles/%s/%s-%s.%s", command.User.UserRegisteredID, kind, uuid.NewString(), ext))
+	key := filepath.ToSlash(fmt.Sprintf("profiles/%s/%s-%s.%s", command.User.UserRegisteredID, kind, uuidv7.NewString(), ext))
 	if err := storage.PutObject(ctx, key, command.Data, command.ContentType); err != nil {
 		return UploadProfileImageResult{}, err
 	}
 	url := storage.PublicURL(key)
-	eventID := uuid.NewString()
+	eventID := uuidv7.NewString()
 	idField := ProfileImageUploadedIDField
 	event := NewProfileImageUploadedEvent(eventID, url, time.Now(), command.User.UserRegisteredID, command.Metadata)
 	if command.Header {
