@@ -42,7 +42,7 @@ func (s Server) todosPage(w http.ResponseWriter, r *http.Request) {
 
 func (s Server) todosStream(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
-	sse := datastar.NewSSE(w, r)
+	sse := newSSE(w, r)
 	ctx := r.Context()
 	key := viewstore.TodoListKey(s.sessionID(r), user.UserRegisteredID)
 

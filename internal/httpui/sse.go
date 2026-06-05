@@ -8,7 +8,11 @@ import (
 )
 
 func writeSSE(w http.ResponseWriter, r *http.Request, fn func(*datastar.ServerSentEventGenerator) error) {
-	_ = fn(datastar.NewSSE(w, r))
+	_ = fn(newSSE(w, r))
+}
+
+func newSSE(w http.ResponseWriter, r *http.Request) *datastar.ServerSentEventGenerator {
+	return datastar.NewSSE(w, r, datastar.WithCompression())
 }
 
 func emptySSE(w http.ResponseWriter, r *http.Request, err error) {
