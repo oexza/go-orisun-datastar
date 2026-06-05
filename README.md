@@ -1,6 +1,6 @@
 # Go-Orisun-Datastar
 
-Go-Orisun-Datastar is a Go/chi/templ starter for event-sourced web applications. [Orisun](https://github.com/oexza/Orisun) stores immutable domain events, SQLite stores read models and auth/session tables, Datastar streams server-rendered UI updates over SSE, and Tailwind/DaisyUI provide the frontend system.
+Go-Orisun-Datastar is a Go/chi/templ starter for event-sourced web applications. [Orisun](https://github.com/oexza/Orisun) stores immutable domain events and exposes embedded NATS/JetStream for event streaming, SQLite stores read models and auth/session tables, Datastar streams server-rendered UI updates over SSE, and Tailwind/DaisyUI provide the frontend system.
 
 The default setup is intentionally local-first: email messages are logged, profile uploads are written to `static/uploads`, and no third-party email or object-storage credentials are required.
 
@@ -74,7 +74,6 @@ The app has useful defaults and can run without a `.env` file. Override these en
 | `APP_URL` | `http://localhost:$PORT` | Base URL used in generated links |
 | `SQLITE_PATH` | `data/app.sqlite` | SQLite read-model/auth database path |
 | `ORISUN_SQLITE_DIR` | `data/orisun` | Embedded Orisun SQLite directory |
-| `NATS_URL` | `nats://localhost:4224` | NATS URL used by app-level notifications |
 | `ORISUN_GENERAL_BOUNDARY` | `go_orisun_datastar` | Orisun boundary name |
 | `UPLOAD_DIR` | `static/uploads` | Local upload destination |
 | `UPLOAD_BASE_URL` | `/static/uploads` | Public URL prefix for uploaded files |

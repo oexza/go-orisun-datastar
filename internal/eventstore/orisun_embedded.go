@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	natsgo "github.com/nats-io/nats.go"
 	orisunconfig "github.com/oexza/Orisun/config"
 	embeddedsqlite "github.com/oexza/Orisun/embedded/sqlite"
 	orisunlog "github.com/oexza/Orisun/logging"
@@ -22,7 +23,6 @@ type EmbeddedConfig struct {
 	Boundary     string
 	SQLiteDir    string
 	NATSStoreDir string
-	NATSPort     int
 	LogLevel     string
 }
 
@@ -40,9 +40,6 @@ func StartEmbeddedOrisun(ctx context.Context, cfg EmbeddedConfig) (*EmbeddedOris
 	if cfg.NATSStoreDir == "" {
 		cfg.NATSStoreDir = "/tmp/go-event-starter-orisun-nats"
 	}
-	if cfg.NATSPort == 0 {
-		cfg.NATSPort = 4225
-	}
 	if cfg.LogLevel == "" {
 		cfg.LogLevel = "info"
 	}
@@ -55,7 +52,7 @@ func StartEmbeddedOrisun(ctx context.Context, cfg EmbeddedConfig) (*EmbeddedOris
 	}
 	appConfig.Admin.Boundary = "orisun_admin"
 	appConfig.Nats.StoreDir = cfg.NATSStoreDir
-	appConfig.Nats.Port = cfg.NATSPort
+	appConfig.Nats.Port = -1
 	appConfig.Nats.Cluster.Enabled = false
 	appConfig.Logging.Level = cfg.LogLevel
 
@@ -71,6 +68,13 @@ func (s *EmbeddedOrisun) Close(ctx context.Context) {
 	if s != nil && s.store != nil {
 		s.store.Close()
 	}
+}
+
+func (s *EmbeddedOrisun) NATSConnection() *natsgo.Conn {
+	if s == nil || s.store == nil {
+		return nil
+	}
+	return s.store.NATSConnection()
 }
 
 func (s *EmbeddedOrisun) SaveEvents(ctx context.Context, events []DomainEvent, expected Position, scopeEvents []ResolvedEvent, subset Query) (WriteResult, error) {

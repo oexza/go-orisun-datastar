@@ -10,7 +10,6 @@ type Config struct {
 	AppURL            string
 	SQLitePath        string
 	OrisunSQLiteDir   string
-	NATSURL           string
 	OrisunBoundary    string
 	SessionSecret     string
 	UploadDir         string
@@ -26,7 +25,6 @@ func Load() Config {
 		AppURL:            env("APP_URL", "http://localhost:"+port),
 		SQLitePath:        env("SQLITE_PATH", "data/app.sqlite"),
 		OrisunSQLiteDir:   env("ORISUN_SQLITE_DIR", "data/orisun"),
-		NATSURL:           env("NATS_URL", "nats://localhost:4224"),
 		OrisunBoundary:    env("ORISUN_GENERAL_BOUNDARY", "go_orisun_datastar"),
 		SessionSecret:     env("BETTER_AUTH_SECRET", "secret-key-that-should-be-very-secret"),
 		UploadDir:         env("UPLOAD_DIR", "static/uploads"),
