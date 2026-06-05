@@ -1,6 +1,6 @@
-# Hono Event Starter, Go Edition
+# Go Event Starter
 
-A Go/chi/templ version of the Bun/Hono event-sourced starter. It keeps the same architectural boundaries: immutable Orisun events are the source of truth, PostgreSQL stores read models and auth/session tables, projections are checkpointed, and Datastar SSE patches server-rendered fragments.
+A Go/chi/templ starter for event-sourced web applications. Immutable Orisun events are the source of truth, PostgreSQL stores read models and auth/session tables, projections are checkpointed, and Datastar SSE patches server-rendered fragments.
 
 ## Variants
 
@@ -22,13 +22,15 @@ task build
 
 ## Services
 
-Reuse the root `docker-compose.yml` services:
+Start PostgreSQL for the Postgres-backed variant:
 
 ```bash
-docker compose up postgres orisun garage -d
+docker compose up postgres -d
 ```
 
-Copy the root `.env.example` values into your shell or a local env loader. The Go app reads the same `POSTGRES_*`, `NATS_URL`, `ORISUN_*`, `BREVO_*`, `STORAGE_*`, `R2_*`, `APP_URL`, and `PORT` variables.
+The starter runs without email or object-storage credentials. Outbound emails are logged, and uploaded profile images are written to `static/uploads`.
+
+Copy the root `.env.example` values into your shell or a local env loader if you want to override defaults. The Go app reads `POSTGRES_*`, `NATS_URL`, `ORISUN_*`, `UPLOAD_DIR`, `UPLOAD_BASE_URL`, `APP_URL`, and `PORT` variables.
 
 ## Notes
 

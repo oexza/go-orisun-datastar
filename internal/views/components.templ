@@ -15,7 +15,7 @@ templ Base(title string) {
 			<script type="module" src={ resources.StaticPath("datastar.js") }></script>
 			<link rel="stylesheet" href={ resources.StaticPath("style.css") }/>
 		</head>
-		<body>
+		<body class="min-h-svh bg-base-200 text-base-content">
 			if isDevelopment() {
 				<div data-init={ hotReloadSSE() }></div>
 			}
@@ -25,38 +25,65 @@ templ Base(title string) {
 }
 
 templ AppNav(user User, active string) {
-	<nav>
-		<a href="/todos">Go Event Starter</a>
-		<span>
-			<a class={ templ.KV("active", active == "todos") } href="/todos">Todos</a>
-			<a class={ templ.KV("active", active == "profile") } href="/profile">{ displayName(user) }</a>
-			<a class={ templ.KV("active", active == "settings") } href="/profile/settings">Settings</a>
+	<nav class="app-nav navbar">
+		<div class="navbar-start">
+			<a class="btn btn-ghost gap-3 px-2 text-base font-bold" href="/todos">
+				<span class="brand-mark">G</span>
+				<span>Go Event Starter</span>
+			</a>
+		</div>
+		<div class="navbar-end gap-2">
+			<div class="menu menu-horizontal hidden gap-1 rounded-box bg-base-200/60 p-1 sm:flex">
+				<a class={ "btn btn-sm", templ.KV("btn-primary", active == "todos"), templ.KV("btn-ghost", active != "todos") } href="/todos">Todos</a>
+				<a class={ "btn btn-sm", templ.KV("btn-primary", active == "profile"), templ.KV("btn-ghost", active != "profile") } href="/profile">Profile</a>
+				<a class={ "btn btn-sm", templ.KV("btn-primary", active == "settings"), templ.KV("btn-ghost", active != "settings") } href="/profile/settings">Settings</a>
+			</div>
+			<div class="avatar placeholder hidden sm:flex">
+				if user.Image != "" {
+					<div class="avatar w-9 rounded-full">
+						<img src={ user.Image } alt=""/>
+					</div>
+				} else {
+					<div class="bg-neutral text-neutral-content w-9 rounded-full">
+						<span class="text-xs font-bold">{ userInitials(user) }</span>
+					</div>
+				}
+			</div>
 			<form method="post" action="/logout">
-				<button>Logout</button>
+				<button class="btn btn-neutral btn-sm">Logout</button>
 			</form>
-		</span>
+		</div>
 	</nav>
 }
 
 templ AuthForm(action string, title string, fields []Field, errors map[string]string) {
-	<main class="page narrow">
-		<h1>{ title }</h1>
-		if errors != nil && errors["error"] != "" {
-			<p class="error">{ errors["error"] }</p>
-		}
-		<form method="post" action={ action } data-on:submit={ postFormSSE(action) }>
-			for _, field := range fields {
-				<label>
-					{ field.Label }
-					<input name={ field.Name } type={ field.Type } required/>
-				</label>
-				if errors != nil && errors[field.Name] != "" {
-					<small class="error">{ errors[field.Name] }</small>
+	<main class="auth-layout">
+		<section class="auth-card card">
+			<div class="card-body gap-5">
+				<div class="grid gap-2 text-center">
+					<div class="mx-auto brand-mark">G</div>
+					<h1 class="text-3xl font-bold">{ title }</h1>
+				</div>
+				if errors != nil && errors["error"] != "" {
+					<div class="alert alert-error alert-soft">{ errors["error"] }</div>
 				}
-			}
-			<button type="submit">{ title }</button>
-		</form>
-		{ children... }
+				<form class="auth-form" method="post" action={ action } data-on:submit={ postFormSSE(action) }>
+					for _, field := range fields {
+						<label class="grid gap-1">
+							<span class="font-semibold">{ field.Label }</span>
+							<input class={ "input w-full", templ.KV("input-error", errors != nil && errors[field.Name] != "") } name={ field.Name } type={ field.Type } required/>
+						</label>
+						if errors != nil && errors[field.Name] != "" {
+							<small class="text-error">{ errors[field.Name] }</small>
+						}
+					}
+					<button class="btn btn-primary" type="submit">{ title }</button>
+				</form>
+				<div class="auth-links">
+					{ children... }
+				</div>
+			</div>
+		</section>
 	</main>
 }
 

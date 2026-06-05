@@ -6,7 +6,8 @@ templ Login(errors map[string]string) {
 			{Name: "email", Type: "email", Label: "Email"},
 			{Name: "password", Type: "password", Label: "Password"},
 		}, errors) {
-			<p><a href="/register">Create account</a> · <a href="/forgot-password">Forgot password?</a></p>
+			<a href="/register">Create account</a>
+			<a href="/forgot-password">Forgot password?</a>
 		}
 	}
 }
@@ -21,7 +22,7 @@ templ Register(errors map[string]string) {
 			{Name: "lastName", Type: "text", Label: "Last name"},
 			{Name: "yearOfBirth", Type: "number", Label: "Year of birth"},
 		}, errors) {
-			<p><a href="/login">Sign in</a></p>
+			<a href="/login">Sign in</a>
 		}
 	}
 }
@@ -31,7 +32,7 @@ templ ForgotPassword(errors map[string]string) {
 		@AuthForm("/forgot-password", "Forgot password", []Field{
 			{Name: "email", Type: "email", Label: "Email"},
 		}, errors) {
-			<p><a href="/login">Back to login</a></p>
+			<a href="/login">Back to login</a>
 		}
 	}
 }
@@ -50,8 +51,8 @@ templ ValidateEmail(userID string, errors map[string]string) {
 		@AuthForm("/register/" + userID + "/validate-email", "Validate email", []Field{
 			{Name: "otp", Type: "text", Label: "Verification code"},
 		}, errors) {
-			<form data-on:submit={ sendValidationOTPSSE(userID) }>
-				<button type="submit">Send new code</button>
+			<form class="w-full" data-on:submit={ sendValidationOTPSSE(userID) }>
+				<button class="btn btn-outline w-full" type="submit">Send new code</button>
 			</form>
 		}
 	}
@@ -61,13 +62,14 @@ templ TodosPage(user User, todos []Todo) {
 	@Base("Todos") {
 		<main class="page">
 			@AppNav(user, "todos")
-			<section>
-				<h1>Todos</h1>
-				<p>A small event-sourced example feature using Orisun projections and Datastar fragments.</p>
+			<section class="page-header">
+				<div class="badge badge-secondary badge-outline w-fit">Datastar SSE</div>
+				<h1 class="page-title">Todos</h1>
+				<p class="page-subtitle">A compact event-sourced workflow powered by Orisun projections and Datastar fragments.</p>
 			</section>
 			<form class="todo-form" data-on:submit={ postFormSSE("/todos") } data-indicator="creatingTodo">
-				<input id="todo-title" name="title" maxlength="160" required placeholder="Add a todo"/>
-				<button type="submit">Add</button>
+				<input class="input w-full" id="todo-title" name="title" maxlength="160" required placeholder="Add a todo"/>
+				<button class="btn btn-primary" type="submit">Add</button>
 				@SseIndicator("creatingTodo")
 			</form>
 			<section id="todo-list" data-init={ longRunningGetSSE("/todos/stream") }>
@@ -93,18 +95,18 @@ templ TodoRow(todo Todo) {
 	{{ mark := "" }}
 	{{ class := "todo-row" }}
 	if todo.Completed {
-		{{ mark = "✓" }}
+		{{ mark = "Done" }}
 		{{ class = "todo-row completed" }}
 	}
 	<article class={ class }>
 		<form data-on:submit={ todoToggleSSE(todo) }>
-			<button aria-label="toggle">{ mark }</button>
+			<button class={ "btn btn-sm", templ.KV("btn-success", todo.Completed), templ.KV("btn-outline", !todo.Completed) } aria-label="toggle todo completion">{ mark }</button>
 		</form>
-		<form class="title" data-on:submit={ todoRenameSSE(todo) }>
-			<input name="title" value={ todo.Title } maxlength="160" required/>
+		<form class="todo-title" data-on:submit={ todoRenameSSE(todo) }>
+			<input class="todo-title-input input input-ghost w-full" name="title" value={ todo.Title } maxlength="160" required/>
 		</form>
 		<form data-on:submit={ todoDeleteSSE(todo) }>
-			<button class="danger">Delete</button>
+			<button class="btn btn-ghost btn-sm text-error">Delete</button>
 		</form>
 	</article>
 }
@@ -113,13 +115,31 @@ templ Profile(user User) {
 	@Base("Profile") {
 		<main class="page">
 			@AppNav(user, "profile")
-			<section class="profile">
-				if user.Image != "" {
-					<img class="avatar" src={ user.Image } alt=""/>
+			<section class="profile-hero">
+				if user.HeaderImageURL != "" {
+					<div class="profile-cover" style={ "background-image: linear-gradient(180deg, transparent, color-mix(in oklab, var(--color-neutral) 28%, transparent)), url('" + user.HeaderImageURL + "')" }></div>
+				} else {
+					<div class="profile-cover"></div>
 				}
-				<h1>{ displayName(user) }</h1>
-				<p>{ "@" + user.Username } · { user.Email }</p>
-				<p>{ user.Bio }</p>
+				<div class="profile-content">
+					if user.Image != "" {
+						<img class="profile-avatar" src={ user.Image } alt=""/>
+					} else {
+						<div class="profile-avatar profile-avatar-fallback">{ userInitials(user) }</div>
+					}
+					<div class="grid gap-1">
+						<h1 class="text-3xl font-bold">{ displayName(user) }</h1>
+						<p class="text-base-content/60">{ "@" + user.Username } · { user.Email }</p>
+					</div>
+					if user.Bio != "" {
+						<p class="max-w-2xl text-lg leading-relaxed">{ user.Bio }</p>
+					} else {
+						<p class="text-base-content/50">No bio yet.</p>
+					}
+					<div>
+						<a class="btn btn-primary" href="/profile/edit">Edit profile</a>
+					</div>
+				</div>
 			</section>
 		</main>
 	}
@@ -129,25 +149,33 @@ templ ProfileEdit(user User, errors map[string]string) {
 	@Base("Edit profile") {
 		<main class="page">
 			@AppNav(user, "profile")
-			<h1>Edit profile</h1>
-			if errors != nil && errors["bio"] != "" {
-				<p class="error">{ errors["bio"] }</p>
-			}
-			<form method="post" action="/profile/bio" data-on:submit={ postFormSSE("/profile/bio") }>
-				<label>
-					Bio
-					<textarea name="bio" maxlength="280">{ user.Bio }</textarea>
-				</label>
-				<button>Save bio</button>
-			</form>
-			<form method="post" enctype="multipart/form-data" action="/profile/avatar">
-				<label>Avatar<input type="file" name="file" accept="image/*"/></label>
-				<button>Upload avatar</button>
-			</form>
-			<form method="post" enctype="multipart/form-data" action="/profile/header-image">
-				<label>Header image<input type="file" name="file" accept="image/*"/></label>
-				<button>Upload header</button>
-			</form>
+			<section class="page-header">
+				<h1 class="page-title">Edit profile</h1>
+				<p class="page-subtitle">Keep the read model fresh with profile events.</p>
+			</section>
+			<section class="settings-grid">
+				<form class="stack-form card bg-base-100 border border-base-300 p-5" method="post" action="/profile/bio" data-on:submit={ postFormSSE("/profile/bio") }>
+					<h2 class="text-lg font-bold">Bio</h2>
+					if errors != nil && errors["bio"] != "" {
+						<div class="alert alert-error alert-soft">{ errors["bio"] }</div>
+					}
+					<label class="grid gap-2">
+						<span class="font-semibold">Bio</span>
+						<textarea class="textarea min-h-32 w-full" name="bio" maxlength="280">{ user.Bio }</textarea>
+					</label>
+					<button class="btn btn-primary">Save bio</button>
+				</form>
+				<form class="stack-form card bg-base-100 border border-base-300 p-5" method="post" enctype="multipart/form-data" action="/profile/avatar">
+					<h2 class="text-lg font-bold">Avatar</h2>
+					<input class="file-input w-full" type="file" name="file" accept="image/*"/>
+					<button class="btn btn-neutral">Upload avatar</button>
+				</form>
+				<form class="stack-form card bg-base-100 border border-base-300 p-5" method="post" enctype="multipart/form-data" action="/profile/header-image">
+					<h2 class="text-lg font-bold">Header image</h2>
+					<input class="file-input w-full" type="file" name="file" accept="image/*"/>
+					<button class="btn btn-neutral">Upload header</button>
+				</form>
+			</section>
 		</main>
 	}
 }
@@ -156,16 +184,32 @@ templ Settings(user User) {
 	@Base("Settings") {
 		<main class="page">
 			@AppNav(user, "settings")
-			<h1>Settings</h1>
-			<form data-on:submit={ postFormSSE("/user/name") }>
-				<label>Name<input name="name" value={ user.Name } required/></label>
-				<button>Save name</button>
-			</form>
-			<form data-on:submit={ postFormSSE("/settings/change-password") }>
-				<label>Current password<input name="currentPassword" type="password" required/></label>
-				<label>New password<input name="newPassword" type="password" required/></label>
-				<button>Change password</button>
-			</form>
+			<section class="page-header">
+				<h1 class="page-title">Settings</h1>
+				<p class="page-subtitle">Account commands append events and update projections asynchronously.</p>
+			</section>
+			<section class="settings-grid">
+				<form class="stack-form card bg-base-100 border border-base-300 p-5" data-on:submit={ postFormSSE("/user/name") }>
+					<h2 class="text-lg font-bold">Display name</h2>
+					<label class="grid gap-2">
+						<span class="font-semibold">Name</span>
+						<input class="input w-full" name="name" value={ user.Name } required/>
+					</label>
+					<button class="btn btn-primary">Save name</button>
+				</form>
+				<form class="stack-form card bg-base-100 border border-base-300 p-5" data-on:submit={ postFormSSE("/settings/change-password") }>
+					<h2 class="text-lg font-bold">Password</h2>
+					<label class="grid gap-2">
+						<span class="font-semibold">Current password</span>
+						<input class="input w-full" name="currentPassword" type="password" required/>
+					</label>
+					<label class="grid gap-2">
+						<span class="font-semibold">New password</span>
+						<input class="input w-full" name="newPassword" type="password" required/>
+					</label>
+					<button class="btn btn-neutral">Change password</button>
+				</form>
+			</section>
 		</main>
 	}
 }
