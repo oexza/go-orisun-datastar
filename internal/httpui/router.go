@@ -10,12 +10,12 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"github.com/example/hono-event-starter-go/internal/auth"
-	"github.com/example/hono-event-starter-go/internal/eventstore"
-	"github.com/example/hono-event-starter-go/internal/features/profile"
-	"github.com/example/hono-event-starter-go/internal/features/todo"
-	"github.com/example/hono-event-starter-go/internal/resources"
-	"github.com/example/hono-event-starter-go/internal/views"
+	"github.com/example/go-orisun-datastar/internal/auth"
+	"github.com/example/go-orisun-datastar/internal/eventstore"
+	"github.com/example/go-orisun-datastar/internal/features/profile"
+	"github.com/example/go-orisun-datastar/internal/features/todo"
+	"github.com/example/go-orisun-datastar/internal/resources"
+	"github.com/example/go-orisun-datastar/internal/views"
 )
 
 type contextKey string

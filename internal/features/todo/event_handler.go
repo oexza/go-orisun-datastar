@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/example/hono-event-starter-go/internal/eventstore"
-	"github.com/example/hono-event-starter-go/internal/views"
+	"github.com/example/go-orisun-datastar/internal/eventstore"
+	"github.com/example/go-orisun-datastar/internal/views"
 )
 
 const TodoReadModelEventHandlerName = "todo_read_model_event_handler"

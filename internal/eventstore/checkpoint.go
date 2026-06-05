@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/example/hono-event-starter-go/internal/dbsql"
+	"github.com/example/go-orisun-datastar/internal/dbsql"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"

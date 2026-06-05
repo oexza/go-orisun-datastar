@@ -37,7 +37,7 @@ func StartEmbeddedOrisun(ctx context.Context, cfg EmbeddedConfig) (*EmbeddedOris
 		return nil, err
 	}
 	if cfg.Boundary == "" {
-		cfg.Boundary = "hono_event_starter"
+		cfg.Boundary = "go_orisun_datastar"
 	}
 	if cfg.PostgresSSLMode == "" {
 		cfg.PostgresSSLMode = "disable"
@@ -170,7 +170,7 @@ func (s *EmbeddedOrisun) SubscribeToEvents(ctx context.Context, subscriberName s
 			}
 			_ = handle(ctx, ResolvedEvent{
 				Position: fromOrisunPosition(event.Position),
-				Event: DomainEvent{EventID: event.EventId, EventType: event.EventType, Data: unflattenMap(data), Metadata: metadata},
+				Event:    DomainEvent{EventID: event.EventId, EventType: event.EventType, Data: unflattenMap(data), Metadata: metadata},
 			})
 		}
 	}()

@@ -3,8 +3,8 @@ package todo
 import (
 	"context"
 
-	"github.com/example/hono-event-starter-go/internal/eventstore"
-	"github.com/example/hono-event-starter-go/internal/views"
+	"github.com/example/go-orisun-datastar/internal/eventstore"
+	"github.com/example/go-orisun-datastar/internal/views"
 )
 
 type Service struct {

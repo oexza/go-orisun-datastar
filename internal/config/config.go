@@ -7,23 +7,23 @@ import (
 )
 
 type Config struct {
-	Port                 string
-	AppURL               string
-	PostgresURL          string
-	PostgresHost         string
-	PostgresPort         string
-	PostgresUser         string
-	PostgresPassword     string
-	PostgresDatabase     string
-	PostgresSSLMode      string
-	NATSURL              string
-	OrisunAddress        string
-	OrisunBoundary       string
-	SessionSecret        string
-	UploadDir            string
-	UploadBaseURL        string
-	UseSSLForPostgres    bool
-	DevelopmentCookie    bool
+	Port              string
+	AppURL            string
+	PostgresURL       string
+	PostgresHost      string
+	PostgresPort      string
+	PostgresUser      string
+	PostgresPassword  string
+	PostgresDatabase  string
+	PostgresSSLMode   string
+	NATSURL           string
+	OrisunAddress     string
+	OrisunBoundary    string
+	SessionSecret     string
+	UploadDir         string
+	UploadBaseURL     string
+	UseSSLForPostgres bool
+	DevelopmentCookie bool
 }
 
 func Load() Config {
@@ -42,7 +42,7 @@ func Load() Config {
 			env("POSTGRES_PASSWORD", "postgres"),
 			env("POSTGRES_HOST", "localhost"),
 			env("POSTGRES_PORT", "5432"),
-			env("POSTGRES_DB", "hono_event_starter"),
+			env("POSTGRES_DB", "go_orisun_datastar"),
 			sslMode,
 		)
 	}
@@ -55,11 +55,11 @@ func Load() Config {
 		PostgresPort:      env("POSTGRES_PORT", "5432"),
 		PostgresUser:      env("POSTGRES_USER", "postgres"),
 		PostgresPassword:  env("POSTGRES_PASSWORD", "postgres"),
-		PostgresDatabase:  env("POSTGRES_DB", "hono_event_starter"),
+		PostgresDatabase:  env("POSTGRES_DB", "go_orisun_datastar"),
 		PostgresSSLMode:   sslMode,
 		NATSURL:           env("NATS_URL", "nats://localhost:4224"),
 		OrisunAddress:     env("ORISUN_HOST", "localhost") + ":" + env("ORISUN_PORT", "5006"),
-		OrisunBoundary:    env("ORISUN_GENERAL_BOUNDARY", "hono_event_starter"),
+		OrisunBoundary:    env("ORISUN_GENERAL_BOUNDARY", "go_orisun_datastar"),
 		SessionSecret:     env("BETTER_AUTH_SECRET", "secret-key-that-should-be-very-secret"),
 		UploadDir:         env("UPLOAD_DIR", "static/uploads"),
 		UploadBaseURL:     env("UPLOAD_BASE_URL", "/static/uploads"),

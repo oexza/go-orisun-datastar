@@ -7,8 +7,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/example/hono-event-starter-go/internal/dbsql"
-	"github.com/example/hono-event-starter-go/internal/views"
+	"github.com/example/go-orisun-datastar/internal/dbsql"
+	"github.com/example/go-orisun-datastar/internal/views"
 )
 
 type ReadModel struct {

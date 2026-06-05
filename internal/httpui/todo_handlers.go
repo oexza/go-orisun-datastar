@@ -7,9 +7,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/starfederation/datastar-go/datastar"
 
-	"github.com/example/hono-event-starter-go/internal/eventstore"
-	"github.com/example/hono-event-starter-go/internal/features/todo"
-	"github.com/example/hono-event-starter-go/internal/views"
+	"github.com/example/go-orisun-datastar/internal/eventstore"
+	"github.com/example/go-orisun-datastar/internal/features/todo"
+	"github.com/example/go-orisun-datastar/internal/views"
 )
 
 func (s Server) todoRoutes(r chi.Router) {
