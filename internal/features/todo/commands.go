@@ -23,7 +23,7 @@ type CreateTodoResult struct {
 	TodoID string
 }
 
-func CreateTodoCommandHandler(ctx context.Context, command CreateTodoCommand, saver EventSaver) (CreateTodoResult, error) {
+func CreateTodoCommandHandler(ctx context.Context, command CreateTodoCommand, saver eventstore.Saver) (CreateTodoResult, error) {
 	title, err := validateTitle(command.Title)
 	if err != nil {
 		return CreateTodoResult{}, err
@@ -51,7 +51,7 @@ type RenameTodoResult struct {
 	Skipped       bool
 }
 
-func RenameTodoCommandHandler(ctx context.Context, command RenameTodoCommand, saver EventSaver, retriever EventRetriever) (RenameTodoResult, error) {
+func RenameTodoCommandHandler(ctx context.Context, command RenameTodoCommand, saver eventstore.Saver, retriever eventstore.Retriever) (RenameTodoResult, error) {
 	title, err := validateTitle(command.Title)
 	if err != nil {
 		return RenameTodoResult{}, err
@@ -89,7 +89,7 @@ type CompleteTodoResult struct {
 	Skipped         bool
 }
 
-func CompleteTodoCommandHandler(ctx context.Context, command CompleteTodoCommand, saver EventSaver, retriever EventRetriever) (CompleteTodoResult, error) {
+func CompleteTodoCommandHandler(ctx context.Context, command CompleteTodoCommand, saver eventstore.Saver, retriever eventstore.Retriever) (CompleteTodoResult, error) {
 	result, err := changeTodoCompletion(ctx, changeTodoCompletionCommand{
 		userRegisteredID: command.UserRegisteredID,
 		todoID:           command.TodoID,
@@ -113,7 +113,7 @@ type ReopenTodoResult struct {
 	Skipped        bool
 }
 
-func ReopenTodoCommandHandler(ctx context.Context, command ReopenTodoCommand, saver EventSaver, retriever EventRetriever) (ReopenTodoResult, error) {
+func ReopenTodoCommandHandler(ctx context.Context, command ReopenTodoCommand, saver eventstore.Saver, retriever eventstore.Retriever) (ReopenTodoResult, error) {
 	result, err := changeTodoCompletion(ctx, changeTodoCompletionCommand{
 		userRegisteredID: command.UserRegisteredID,
 		todoID:           command.TodoID,
@@ -136,7 +136,7 @@ type DeleteTodoResult struct {
 	TodoDeletedID string
 }
 
-func DeleteTodoCommandHandler(ctx context.Context, command DeleteTodoCommand, saver EventSaver, retriever EventRetriever) (DeleteTodoResult, error) {
+func DeleteTodoCommandHandler(ctx context.Context, command DeleteTodoCommand, saver eventstore.Saver, retriever eventstore.Retriever) (DeleteTodoResult, error) {
 	model, err := loadTodoContext(ctx, retriever, command.TodoID, command.UserRegisteredID)
 	if err != nil {
 		return DeleteTodoResult{}, err
@@ -167,7 +167,7 @@ type changeTodoCompletionResult struct {
 	skipped bool
 }
 
-func changeTodoCompletion(ctx context.Context, command changeTodoCompletionCommand, saver EventSaver, retriever EventRetriever) (changeTodoCompletionResult, error) {
+func changeTodoCompletion(ctx context.Context, command changeTodoCompletionCommand, saver eventstore.Saver, retriever eventstore.Retriever) (changeTodoCompletionResult, error) {
 	model, err := loadTodoContext(ctx, retriever, command.todoID, command.userRegisteredID)
 	if err != nil {
 		return changeTodoCompletionResult{}, err
@@ -203,7 +203,7 @@ type todoContextModel struct {
 	events    []eventstore.ResolvedEvent
 }
 
-func loadTodoContext(ctx context.Context, retriever EventRetriever, todoID, userRegisteredID string) (*todoContextModel, error) {
+func loadTodoContext(ctx context.Context, retriever eventstore.Retriever, todoID, userRegisteredID string) (*todoContextModel, error) {
 	events, err := retriever.GetEvents(ctx, eventstore.NoEventPosition, 100, eventstore.Forward, streamQuery(todoID, userRegisteredID))
 	if err != nil {
 		return nil, err

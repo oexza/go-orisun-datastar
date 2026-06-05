@@ -22,13 +22,13 @@ import (
 
 type Service struct {
 	db            *appdb.DB
-	store         EventSaver
-	retriever     EventRetriever
+	store         eventstore.Saver
+	retriever     eventstore.Retriever
 	secureCookie  bool
 	sessionCookie string
 }
 
-func NewService(db *appdb.DB, saver EventSaver, retriever EventRetriever, secureCookie bool) *Service {
+func NewService(db *appdb.DB, saver eventstore.Saver, retriever eventstore.Retriever, secureCookie bool) *Service {
 	return &Service{
 		db:            db,
 		store:         saver,

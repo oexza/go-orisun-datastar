@@ -101,7 +101,7 @@ type ReadModelEventHandler struct {
 	readModel *ReadModel
 }
 
-func NewReadModelEventHandler(subscriber EventSubscriber, checkpointer EventCheckpointer, readModel *ReadModel, logger *slog.Logger) (*ReadModelEventHandler, error) {
+func NewReadModelEventHandler(subscriber eventstore.Subscriber, checkpointer eventstore.Checkpointer, readModel *ReadModel, logger *slog.Logger) (*ReadModelEventHandler, error) {
 	handler := &ReadModelEventHandler{readModel: readModel}
 	global, err := eventstore.NewGlobalEventHandler(eventstore.GlobalEventHandlerConfig{
 		Subscriber:      subscriber,

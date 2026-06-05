@@ -3,17 +3,18 @@ package todo
 import (
 	"context"
 
+	"github.com/oexza/go-orisun-datastar/internal/eventstore"
 	"github.com/oexza/go-orisun-datastar/internal/views"
 )
 
 type Service struct {
 	readModel TodoReadModelReader
-	saver     EventSaver
-	retriever EventRetriever
-	publisher EventPublisher
+	saver     eventstore.Saver
+	retriever eventstore.Retriever
+	publisher eventstore.Publisher
 }
 
-func NewService(readModel TodoReadModelReader, saver EventSaver, retriever EventRetriever, publisher EventPublisher) *Service {
+func NewService(readModel TodoReadModelReader, saver eventstore.Saver, retriever eventstore.Retriever, publisher eventstore.Publisher) *Service {
 	return &Service{readModel: readModel, saver: saver, retriever: retriever, publisher: publisher}
 }
 

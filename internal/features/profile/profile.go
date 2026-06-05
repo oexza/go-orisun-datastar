@@ -15,11 +15,11 @@ import (
 )
 
 type Service struct {
-	store   EventSaver
+	store   eventstore.Saver
 	storage ObjectStore
 }
 
-func NewService(store EventSaver, storage ObjectStore) *Service {
+func NewService(store eventstore.Saver, storage ObjectStore) *Service {
 	return &Service{store: store, storage: storage}
 }
 
