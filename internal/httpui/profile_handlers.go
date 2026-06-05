@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/starfederation/datastar-go/datastar"
 
+	"github.com/example/hono-event-starter-go/internal/eventstore"
 	"github.com/example/hono-event-starter-go/internal/views"
 )
 
@@ -35,9 +36,10 @@ func (s Server) settings(w http.ResponseWriter, r *http.Request) {
 
 func (s Server) updateBio(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
-	err := s.Profile.UpdateBio(r.Context(), currentUser(r), r.FormValue("bio"))
+	user := currentUser(r)
+	err := s.Profile.UpdateBioWithMetadata(r.Context(), user, r.FormValue("bio"), eventstore.HTTPCommandMetadata(r, user.UserRegisteredID))
 	if err != nil {
-		_ = views.ProfileEdit(currentUser(r), map[string]string{"bio": err.Error()}).Render(r.Context(), w)
+		_ = views.ProfileEdit(user, map[string]string{"bio": err.Error()}).Render(r.Context(), w)
 		return
 	}
 	writeSSE(w, r, func(sse *datastar.ServerSentEventGenerator) error { return sse.Redirect("/profile") })
@@ -52,12 +54,13 @@ func (s Server) uploadHeader(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) uploadImage(w http.ResponseWriter, r *http.Request, header bool) {
+	user := currentUser(r)
 	data, contentType, err := readUpload(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if _, err := s.Profile.UploadImage(r.Context(), currentUser(r), data, contentType, header); err != nil {
+	if _, err := s.Profile.UploadImageWithMetadata(r.Context(), user, data, contentType, header, eventstore.HTTPCommandMetadata(r, user.UserRegisteredID)); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -66,7 +69,8 @@ func (s Server) uploadImage(w http.ResponseWriter, r *http.Request, header bool)
 
 func (s Server) updateName(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
-	err := s.Auth.UpdateName(r.Context(), currentUser(r), r.FormValue("name"))
+	user := currentUser(r)
+	err := s.Auth.UpdateNameWithMetadata(r.Context(), user, r.FormValue("name"), eventstore.HTTPCommandMetadata(r, user.UserRegisteredID))
 	writeSSE(w, r, func(sse *datastar.ServerSentEventGenerator) error {
 		if err != nil {
 			return alert(sse, err.Error())
@@ -77,7 +81,8 @@ func (s Server) updateName(w http.ResponseWriter, r *http.Request) {
 
 func (s Server) changePassword(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
-	err := s.Auth.ChangePassword(r.Context(), currentUser(r), r.FormValue("currentPassword"), r.FormValue("newPassword"))
+	user := currentUser(r)
+	err := s.Auth.ChangePasswordWithMetadata(r.Context(), user, r.FormValue("currentPassword"), r.FormValue("newPassword"), eventstore.HTTPCommandMetadata(r, user.UserRegisteredID))
 	writeSSE(w, r, func(sse *datastar.ServerSentEventGenerator) error {
 		if err != nil {
 			return alert(sse, err.Error())

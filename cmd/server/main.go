@@ -14,6 +14,7 @@ import (
 	"github.com/example/hono-event-starter-go/internal/auth"
 	"github.com/example/hono-event-starter-go/internal/config"
 	"github.com/example/hono-event-starter-go/internal/email"
+	"github.com/example/hono-event-starter-go/internal/eventcatalog"
 	"github.com/example/hono-event-starter-go/internal/eventstore"
 	"github.com/example/hono-event-starter-go/internal/features/profile"
 	"github.com/example/hono-event-starter-go/internal/features/todo"
@@ -65,6 +66,10 @@ func main() {
 		os.Exit(1)
 	}
 	defer orisunStore.Close(context.Background())
+	if err := orisunStore.EnsureBoundaryIndexes(ctx, eventcatalog.BoundaryIndexes()); err != nil {
+		logger.Error("ensure orisun indexes", "err", err)
+		os.Exit(1)
+	}
 
 	bus, err := natsbus.Connect(cfg.NATSURL)
 	if err != nil {

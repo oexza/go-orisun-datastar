@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
+	"sort"
 )
 
 var (
@@ -113,14 +115,35 @@ func MustJSON(v any) string {
 	return string(data)
 }
 
+func MustData(v any) map[string]any {
+	data, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+	out := map[string]any{}
+	if err := json.Unmarshal(data, &out); err != nil {
+		panic(err)
+	}
+	return out
+}
+
 func MergeScope(events []ResolvedEvent, target DomainEvent) (DomainEvent, error) {
 	if target.Data == nil {
 		target.Data = map[string]any{}
 	}
 	targetScope := Scope(target.Data)
-	for _, resolved := range events {
+	sortedEvents := append([]ResolvedEvent(nil), events...)
+	sort.SliceStable(sortedEvents, func(i, j int) bool {
+		left := sortedEvents[i].Position
+		right := sortedEvents[j].Position
+		if left.Commit != right.Commit {
+			return left.Commit < right.Commit
+		}
+		return left.Prepare < right.Prepare
+	})
+	for _, resolved := range sortedEvents {
 		for key, value := range Scope(resolved.Event.Data) {
-			if existing, ok := targetScope[key]; ok && existing != value {
+			if existing, ok := targetScope[key]; ok && !reflect.DeepEqual(existing, value) {
 				return target, ErrConflict
 			}
 			targetScope[key] = value

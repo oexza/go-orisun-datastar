@@ -62,18 +62,7 @@ func SendEmailValidationOTPCommandHandler(ctx context.Context, command SendEmail
 	}
 
 	id := uuid.NewString()
-	sent := eventstore.DomainEvent{
-		EventID:   id,
-		EventType: EmailVerificationOTPSent,
-		Data: map[string]any{
-			"emailVerificationOTPSentId": id,
-			"sentAt":                     time.Now().Format(time.RFC3339),
-			"scope": map[string]any{
-				"emailVerificationOTPGeneratedId": command.EmailVerificationOTPGeneratedID,
-			},
-		},
-		Metadata: metadataWithQuery(command.Metadata, combineQueries(generatedQuery, userQuery, sentQuery)),
-	}
+	sent := NewEmailVerificationOTPSentEvent(id, time.Now(), command.EmailVerificationOTPGeneratedID, metadataWithQuery(command.Metadata, combineQueries(generatedQuery, userQuery, sentQuery)))
 	_, err = saver.SaveEvents(ctx, []eventstore.DomainEvent{sent}, model.position, append(generatedEvents, userEvents...), combineQueries(generatedQuery, userQuery, sentQuery))
 	return err
 }
@@ -117,18 +106,7 @@ func SendPasswordResetEmailCommandHandler(ctx context.Context, command SendPassw
 	}
 
 	id := uuid.NewString()
-	sent := eventstore.DomainEvent{
-		EventID:   id,
-		EventType: PasswordResetEmailSent,
-		Data: map[string]any{
-			"passwordResetEmailSentId": id,
-			"sentAt":                   time.Now().Format(time.RFC3339),
-			"scope": map[string]any{
-				"passwordResetRequestedId": command.PasswordResetRequestedID,
-			},
-		},
-		Metadata: metadataWithQuery(command.Metadata, combineQueries(requestedQuery, sentQuery)),
-	}
+	sent := NewPasswordResetEmailSentEvent(id, time.Now(), command.PasswordResetRequestedID, metadataWithQuery(command.Metadata, combineQueries(requestedQuery, sentQuery)))
 	_, err = saver.SaveEvents(ctx, []eventstore.DomainEvent{sent}, model.position, requestedEvents, combineQueries(requestedQuery, sentQuery))
 	return err
 }
@@ -185,42 +163,42 @@ func (m *passwordResetEmailContext) handle(resolved eventstore.ResolvedEvent) {
 func userRegisteredQuery(userRegisteredID string) eventstore.Query {
 	return eventstore.Query{Criteria: []eventstore.Criterion{{Tags: []eventstore.Tag{
 		{Key: "eventType", Value: UserRegistered},
-		{Key: "userRegisteredId", Value: userRegisteredID},
+		{Key: UserRegisteredIDField, Value: userRegisteredID},
 	}}}}
 }
 
 func emailVerificationOTPGeneratedQuery(otpID string) eventstore.Query {
 	return eventstore.Query{Criteria: []eventstore.Criterion{{Tags: []eventstore.Tag{
 		{Key: "eventType", Value: EmailVerificationOTPGenerated},
-		{Key: "emailVerificationOTPGeneratedId", Value: otpID},
+		{Key: EmailVerificationOTPGeneratedIDField, Value: otpID},
 	}}}}
 }
 
 func emailVerificationOTPSentQuery(otpID string) eventstore.Query {
 	return eventstore.Query{Criteria: []eventstore.Criterion{{Tags: []eventstore.Tag{
 		{Key: "eventType", Value: EmailVerificationOTPSent},
-		{Key: "scope.emailVerificationOTPGeneratedId", Value: otpID},
+		{Key: ScopeEmailVerificationOTPGeneratedIDField, Value: otpID},
 	}}}}
 }
 
 func emailVerificationOTPValidatedQuery(otpID string) eventstore.Query {
 	return eventstore.Query{Criteria: []eventstore.Criterion{{Tags: []eventstore.Tag{
 		{Key: "eventType", Value: EmailVerificationOTPValidated},
-		{Key: "scope.emailVerificationOTPGeneratedId", Value: otpID},
+		{Key: ScopeEmailVerificationOTPGeneratedIDField, Value: otpID},
 	}}}}
 }
 
 func passwordResetRequestedQuery(requestID string) eventstore.Query {
 	return eventstore.Query{Criteria: []eventstore.Criterion{{Tags: []eventstore.Tag{
 		{Key: "eventType", Value: PasswordResetRequested},
-		{Key: "passwordResetRequestedId", Value: requestID},
+		{Key: PasswordResetRequestedIDField, Value: requestID},
 	}}}}
 }
 
 func passwordResetEmailSentQuery(requestID string) eventstore.Query {
 	return eventstore.Query{Criteria: []eventstore.Criterion{{Tags: []eventstore.Tag{
 		{Key: "eventType", Value: PasswordResetEmailSent},
-		{Key: "scope.passwordResetRequestedId", Value: requestID},
+		{Key: ScopePasswordResetRequestedIDField, Value: requestID},
 	}}}}
 }
 
