@@ -91,6 +91,66 @@ func (s *Service) DeleteWithMetadata(ctx context.Context, userRegisteredID, todo
 	return err
 }
 
+func (s *Service) CompleteAllActive(ctx context.Context, userRegisteredID string, metadata ...CommandMetadata) error {
+	return s.CompleteAllActiveWithMetadata(ctx, userRegisteredID, firstMetadata(metadata))
+}
+
+func (s *Service) CompleteAllActiveWithMetadata(ctx context.Context, userRegisteredID string, metadata CommandMetadata) error {
+	todos, err := s.readModel.List(ctx, userRegisteredID)
+	if err != nil {
+		return err
+	}
+	for _, item := range todos {
+		if item.Completed {
+			continue
+		}
+		if err := s.CompleteWithMetadata(ctx, userRegisteredID, item.TodoID, metadata); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) ReopenAllCompleted(ctx context.Context, userRegisteredID string, metadata ...CommandMetadata) error {
+	return s.ReopenAllCompletedWithMetadata(ctx, userRegisteredID, firstMetadata(metadata))
+}
+
+func (s *Service) ReopenAllCompletedWithMetadata(ctx context.Context, userRegisteredID string, metadata CommandMetadata) error {
+	todos, err := s.readModel.List(ctx, userRegisteredID)
+	if err != nil {
+		return err
+	}
+	for _, item := range todos {
+		if !item.Completed {
+			continue
+		}
+		if err := s.ReopenWithMetadata(ctx, userRegisteredID, item.TodoID, metadata); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) ClearCompleted(ctx context.Context, userRegisteredID string, metadata ...CommandMetadata) error {
+	return s.ClearCompletedWithMetadata(ctx, userRegisteredID, firstMetadata(metadata))
+}
+
+func (s *Service) ClearCompletedWithMetadata(ctx context.Context, userRegisteredID string, metadata CommandMetadata) error {
+	todos, err := s.readModel.List(ctx, userRegisteredID)
+	if err != nil {
+		return err
+	}
+	for _, item := range todos {
+		if !item.Completed {
+			continue
+		}
+		if err := s.DeleteWithMetadata(ctx, userRegisteredID, item.TodoID, metadata); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func firstMetadata(metadata []CommandMetadata) CommandMetadata {
 	if len(metadata) == 0 || metadata[0] == nil {
 		return CommandMetadata{}

@@ -83,7 +83,6 @@ templ TodosPage(user User, todos []Todo) {
 		<main class="page">
 			@AppNav(user, "todos")
 			<section class="page-header">
-				<div class="badge badge-secondary badge-outline w-fit">Datastar SSE</div>
 				<h1 class="page-title">Todos</h1>
 				<p class="page-subtitle">A compact event-sourced workflow powered by Orisun projections and Datastar fragments.</p>
 			</section>
@@ -92,16 +91,67 @@ templ TodosPage(user User, todos []Todo) {
 				<button class="btn btn-primary" type="submit">Add</button>
 				@SseIndicator("creatingTodo")
 			</form>
-			<section id="todo-list" data-init={ longRunningGetSSE("/todos/stream") }>
-				@TodoList(todos)
+			<section id="todo-workspace" data-init={ longRunningGetSSE("/todos/stream") }>
+				@TodoWorkspace(todos)
 			</section>
 		</main>
 	}
 }
 
+templ TodoWorkspace(todos []Todo) {
+	{{ stats := todoStats(todos) }}
+	<section class="todo-summary" aria-label="Todo summary">
+		<div class="todo-metric">
+			<span>Total</span>
+			<strong>{ todoCountLabel(stats.Total) }</strong>
+		</div>
+		<div class="todo-metric">
+			<span>Active</span>
+			<strong>{ todoCountLabel(stats.Active) }</strong>
+		</div>
+		<div class="todo-metric">
+			<span>Done</span>
+			<strong>{ todoCountLabel(stats.Completed) }</strong>
+		</div>
+		<div class="todo-progress" aria-label="Completion progress">
+			<div>
+				<span>Progress</span>
+				<strong>{ todoCompletionLabel(stats) }</strong>
+			</div>
+			<div class="todo-progress-track">
+				<div class="todo-progress-bar" style={ todoProgressStyle(stats) }></div>
+			</div>
+		</div>
+	</section>
+	<section class="todo-toolbar" aria-label="Todo bulk actions">
+		if stats.Active > 0 {
+			<form data-on:submit={ todoCompleteActiveSSE() }>
+				<button class="btn btn-sm btn-outline" type="submit">Complete active</button>
+			</form>
+		} else {
+			<button class="btn btn-sm btn-outline btn-disabled" type="button">Complete active</button>
+		}
+		if stats.Completed > 0 {
+			<form data-on:submit={ todoReopenCompletedSSE() }>
+				<button class="btn btn-sm btn-outline" type="submit">Reopen done</button>
+			</form>
+			<form data-on:submit={ todoClearCompletedSSE() }>
+				<button class="btn btn-sm btn-ghost text-error" type="submit">Clear done</button>
+			</form>
+		} else {
+			<button class="btn btn-sm btn-outline btn-disabled" type="button">Reopen done</button>
+			<button class="btn btn-sm btn-ghost btn-disabled" type="button">Clear done</button>
+		}
+	</section>
+	@TodoList(todos)
+}
+
 templ TodoList(todos []Todo) {
 	if len(todos) == 0 {
-		<div class="empty">No todos yet.</div>
+		<div class="empty">
+			<h2>No todos yet</h2>
+			<p>Add the first item and the read model will update over SSE.</p>
+		</div>
 	} else {
 		<div class="todo-list">
 			for _, todo := range todos {
@@ -112,21 +162,30 @@ templ TodoList(todos []Todo) {
 }
 
 templ TodoRow(todo Todo) {
-	{{ mark := "" }}
 	{{ class := "todo-row" }}
 	if todo.Completed {
-		{{ mark = "Done" }}
 		{{ class = "todo-row completed" }}
 	}
 	<article class={ class }>
 		<form data-on:submit={ todoToggleSSE(todo) }>
-			<button class={ "btn btn-sm", templ.KV("btn-success", todo.Completed), templ.KV("btn-outline", !todo.Completed) } aria-label="toggle todo completion">{ mark }</button>
+			<button class={ "todo-check", templ.KV("checked", todo.Completed) } aria-label="toggle todo completion">
+			</button>
 		</form>
 		<form class="todo-title" data-on:submit={ todoRenameSSE(todo) }>
 			<input class="todo-title-input input input-ghost w-full" name="title" value={ todo.Title } maxlength="160" required/>
+			if todoTimeLabel(todo) != "" {
+				<span class="todo-meta">{ todoTimeLabel(todo) }</span>
+			}
 		</form>
+		<span class={ "todo-status", templ.KV("done", todo.Completed) }>
+			if todo.Completed {
+				Done
+			} else {
+				Active
+			}
+		</span>
 		<form data-on:submit={ todoDeleteSSE(todo) }>
-			<button class="btn btn-ghost btn-sm text-error">Delete</button>
+			<button class="btn btn-ghost btn-sm text-error" aria-label="Delete todo">Delete</button>
 		</form>
 	</article>
 }
@@ -176,10 +235,10 @@ templ ProfileEditPanel(user User, errors map[string]string) {
 		@AppNav(user, "profile")
 		<section class="page-header">
 			<h1 class="page-title">Edit profile</h1>
-			<p class="page-subtitle">Keep the read model fresh with profile events.</p>
+			<p class="page-subtitle">Update profile details through commands that publish profile events.</p>
 		</section>
 		<section class="settings-grid">
-			<form class="stack-form card bg-base-100 border border-base-300 p-5" method="post" action="/profile/bio" data-on:submit={ postFormSSE("/profile/bio") }>
+			<form class="stack-form panel" method="post" action="/profile/bio" data-on:submit={ postFormSSE("/profile/bio") }>
 				<h2 class="text-lg font-bold">Bio</h2>
 				if errors != nil && errors["bio"] != "" {
 					<div class="alert alert-error alert-soft">{ errors["bio"] }</div>
@@ -190,12 +249,12 @@ templ ProfileEditPanel(user User, errors map[string]string) {
 				</label>
 				<button class="btn btn-primary">Save bio</button>
 			</form>
-			<form class="stack-form card bg-base-100 border border-base-300 p-5" method="post" enctype="multipart/form-data" action="/profile/avatar">
+			<form class="stack-form panel" method="post" enctype="multipart/form-data" action="/profile/avatar">
 				<h2 class="text-lg font-bold">Avatar</h2>
 				<input class="file-input w-full" type="file" name="file" accept="image/*"/>
 				<button class="btn btn-neutral">Upload avatar</button>
 			</form>
-			<form class="stack-form card bg-base-100 border border-base-300 p-5" method="post" enctype="multipart/form-data" action="/profile/header-image">
+			<form class="stack-form panel" method="post" enctype="multipart/form-data" action="/profile/header-image">
 				<h2 class="text-lg font-bold">Header image</h2>
 				<input class="file-input w-full" type="file" name="file" accept="image/*"/>
 				<button class="btn btn-neutral">Upload header</button>
@@ -213,7 +272,7 @@ templ Settings(user User) {
 				<p class="page-subtitle">Account commands append events and update projections asynchronously.</p>
 			</section>
 			<section class="settings-grid">
-				<form class="stack-form card bg-base-100 border border-base-300 p-5" data-on:submit={ postFormSSE("/user/name") }>
+				<form class="stack-form panel" data-on:submit={ postFormSSE("/user/name") }>
 					<h2 class="text-lg font-bold">Display name</h2>
 					<label class="grid gap-2">
 						<span class="font-semibold">Name</span>
@@ -221,7 +280,7 @@ templ Settings(user User) {
 					</label>
 					<button class="btn btn-primary">Save name</button>
 				</form>
-				<form class="stack-form card bg-base-100 border border-base-300 p-5" data-on:submit={ postFormSSE("/settings/change-password") }>
+				<form class="stack-form panel" data-on:submit={ postFormSSE("/settings/change-password") }>
 					<h2 class="text-lg font-bold">Password</h2>
 					<label class="grid gap-2">
 						<span class="font-semibold">Current password</span>

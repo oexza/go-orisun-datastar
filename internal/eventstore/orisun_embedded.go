@@ -84,10 +84,12 @@ func (s *EmbeddedOrisun) SaveEvents(ctx context.Context, events []DomainEvent, e
 		if err != nil {
 			return WriteResult{}, err
 		}
+		data := flattenMap(merged.Data)
+		data["eventType"] = merged.EventType
 		toSave = append(toSave, orisunapi.EventWithMapTags{
 			EventId:   merged.EventID,
 			EventType: merged.EventType,
-			Data:      flattenMap(merged.Data),
+			Data:      data,
 			Metadata:  merged.Metadata,
 		})
 	}
@@ -143,33 +145,54 @@ func (s *EmbeddedOrisun) GetEvents(ctx context.Context, from Position, count int
 }
 
 func (s *EmbeddedOrisun) SubscribeToEvents(ctx context.Context, subscriberName string, after Position, query Query, handle func(context.Context, ResolvedEvent) error) error {
-	handler := orisunapi.NewMessageHandler[orisunapi.Event](ctx)
+	subscriptionCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	handler := orisunapi.NewMessageHandler[orisunapi.Event](subscriptionCtx)
+	errs := make(chan error, 2)
+
 	go func() {
 		for {
 			event, err := handler.Recv()
 			if err != nil {
+				errs <- err
 				return
 			}
 			data := map[string]any{}
 			if event.Data != "" {
 				if err := json.Unmarshal([]byte(event.Data), &data); err != nil {
-					continue
+					errs <- err
+					return
 				}
 			}
 			metadata := map[string]any{}
 			if event.Metadata != "" {
 				_ = json.Unmarshal([]byte(event.Metadata), &metadata)
 			}
-			_ = handle(ctx, ResolvedEvent{
+			if err := handle(subscriptionCtx, ResolvedEvent{
 				Position: fromOrisunPosition(event.Position),
 				Event:    DomainEvent{EventID: event.EventId, EventType: event.EventType, Data: unflattenMap(data), Metadata: metadata},
-			})
+			}); err != nil {
+				errs <- err
+				return
+			}
 		}
 	}()
+
 	go func() {
-		_ = s.store.SubscribeToEvents(ctx, s.boundary, subscriberName, toOrisunPosition(after), toOrisunQuery(query), handler)
+		errs <- s.store.SubscribeToEvents(subscriptionCtx, s.boundary, subscriberName, toOrisunPosition(after), toOrisunQuery(query), handler)
 	}()
-	return nil
+
+	select {
+	case err := <-errs:
+		cancel()
+		handler.Close()
+		return err
+	case <-ctx.Done():
+		cancel()
+		handler.Close()
+		return ctx.Err()
+	}
 }
 
 func toOrisunPosition(position Position) *orisunapi.Position {

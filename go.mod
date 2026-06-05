@@ -8,7 +8,7 @@ require (
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/google/uuid v1.6.0
 	github.com/nats-io/nats.go v1.52.0
-	github.com/oexza/Orisun v0.2.11
+	github.com/oexza/Orisun v0.2.13
 	github.com/starfederation/datastar-go v1.2.2
 	golang.org/x/crypto v0.52.0
 	zombiezen.com/go/sqlite v1.4.2

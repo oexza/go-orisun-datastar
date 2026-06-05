@@ -25,6 +25,9 @@ func (s Server) todoRoutes(r chi.Router) {
 	r.Post("/todos/{todoID}/complete", s.completeTodo)
 	r.Post("/todos/{todoID}/reopen", s.reopenTodo)
 	r.Post("/todos/{todoID}/delete", s.deleteTodo)
+	r.Post("/todos/bulk/complete-active", s.completeActiveTodos)
+	r.Post("/todos/bulk/reopen-completed", s.reopenCompletedTodos)
+	r.Post("/todos/bulk/clear-completed", s.clearCompletedTodos)
 }
 
 func (s Server) todosPage(w http.ResponseWriter, r *http.Request) {
@@ -90,7 +93,7 @@ func (s Server) todosStream(w http.ResponseWriter, r *http.Request) {
 				_ = alert(sse, err.Error())
 				return
 			}
-			if err := sse.PatchElementTempl(views.TodoList(state.Todos), datastar.WithSelector("#todo-list"), datastar.WithMode(datastar.ElementPatchModeInner)); err != nil {
+			if err := sse.PatchElementTempl(views.TodoWorkspace(state.Todos), datastar.WithSelector("#todo-workspace"), datastar.WithMode(datastar.ElementPatchModeInner)); err != nil {
 				return
 			}
 		}
@@ -127,6 +130,21 @@ func (s Server) reopenTodo(w http.ResponseWriter, r *http.Request) {
 func (s Server) deleteTodo(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 	emptySSE(w, r, s.Todos.DeleteWithMetadata(r.Context(), user.UserRegisteredID, chi.URLParam(r, "todoID"), eventstore.HTTPCommandMetadata(r, user.UserRegisteredID)))
+}
+
+func (s Server) completeActiveTodos(w http.ResponseWriter, r *http.Request) {
+	user := currentUser(r)
+	emptySSE(w, r, s.Todos.CompleteAllActiveWithMetadata(r.Context(), user.UserRegisteredID, eventstore.HTTPCommandMetadata(r, user.UserRegisteredID)))
+}
+
+func (s Server) reopenCompletedTodos(w http.ResponseWriter, r *http.Request) {
+	user := currentUser(r)
+	emptySSE(w, r, s.Todos.ReopenAllCompletedWithMetadata(r.Context(), user.UserRegisteredID, eventstore.HTTPCommandMetadata(r, user.UserRegisteredID)))
+}
+
+func (s Server) clearCompletedTodos(w http.ResponseWriter, r *http.Request) {
+	user := currentUser(r)
+	emptySSE(w, r, s.Todos.ClearCompletedWithMetadata(r.Context(), user.UserRegisteredID, eventstore.HTTPCommandMetadata(r, user.UserRegisteredID)))
 }
 
 func (s Server) refreshTodoViewState(ctx context.Context, key string, userRegisteredID string) error {

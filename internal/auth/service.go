@@ -197,9 +197,24 @@ func (s *Service) GenerateEmailVerificationOTPWithMetadata(ctx context.Context, 
 }
 
 func (s *Service) generateEmailVerificationOTP(ctx context.Context, user views.User, metadata CommandMetadata) error {
-	model, err := s.emailVerificationOTPContext(ctx, user.UserRegisteredID)
+	userQuery := userRegisteredQuery(user.UserRegisteredID)
+	userEvents, err := s.retriever.GetEvents(ctx, eventstore.NoEventPosition, 1, eventstore.Forward, userQuery)
 	if err != nil {
 		return err
+	}
+	if len(userEvents) == 0 {
+		return errors.New("registered user event not found")
+	}
+
+	latestStateQuery := emailVerificationOTPStateQuery(user.UserRegisteredID)
+	latestEvents, err := s.retriever.GetEvents(ctx, eventstore.LastEventPosition, 1, eventstore.Backward, latestStateQuery)
+	if err != nil {
+		return err
+	}
+
+	model := emailVerificationOTPModel{position: eventstore.NoEventPosition}
+	for _, resolved := range append(userEvents, latestEvents...) {
+		model.handle(resolved)
 	}
 	if model.emailValidated {
 		return nil
@@ -226,7 +241,7 @@ func (s *Service) generateEmailVerificationOTP(ctx context.Context, user views.U
 	}); err != nil {
 		return err
 	}
-	if _, err := s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, query); err != nil {
+	if _, err := s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, model.position, model.eventsHandled, combineQueries(userQuery, latestStateQuery)); err != nil {
 		return err
 	}
 	return nil
@@ -261,7 +276,7 @@ func (s *Service) ValidateOTPWithMetadata(ctx context.Context, userID, code stri
 		{Key: "eventType", Value: EmailVerificationOTPGenerated},
 		{Key: ScopeUserRegisteredIDField, Value: user.UserRegisteredID},
 	}}}}
-	generatedEvents, err := s.retriever.GetEvents(ctx, eventstore.NoEventPosition, 100, eventstore.Forward, generatedQuery)
+	generatedEvents, err := s.retriever.GetEvents(ctx, eventstore.LastEventPosition, 1, eventstore.Backward, generatedQuery)
 	if err != nil {
 		return err
 	}
@@ -282,16 +297,25 @@ func (s *Service) ValidateOTPWithMetadata(ctx context.Context, userID, code stri
 		return errors.New("verification code already validated")
 	}
 
+	userQuery := userRegisteredQuery(user.UserRegisteredID)
+	userEvents, err := s.retriever.GetEvents(ctx, eventstore.NoEventPosition, 1, eventstore.Forward, userQuery)
+	if err != nil {
+		return err
+	}
+	if len(userEvents) == 0 {
+		return errors.New("registered user event not found")
+	}
+
 	validationID := uuid.NewString()
 	event := NewEmailVerificationOTPValidatedEvent(validationID, time.Now(), otp.id, user.UserRegisteredID, metadataWithQuery(metadata, combineQueries(generatedQuery, validationQuery)))
 	modelPosition := eventstore.NoEventPosition
-	handledEvents := append(generatedEvents, validationEvents...)
+	handledEvents := append(append(generatedEvents, validationEvents...), userEvents...)
 	for _, resolved := range handledEvents {
 		if resolved.Position.After(modelPosition) {
 			modelPosition = resolved.Position
 		}
 	}
-	_, err = s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, modelPosition, handledEvents, combineQueries(generatedQuery, validationQuery))
+	_, err = s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, modelPosition, handledEvents, combineQueries(generatedQuery, validationQuery, userQuery))
 	return err
 }
 
@@ -360,6 +384,25 @@ func (s *Service) ResetPasswordWithMetadata(ctx context.Context, token, password
 type emailVerificationOTPModel struct {
 	emailValidated     bool
 	latestOTPExpiresAt time.Time
+	position           eventstore.Position
+	eventsHandled      []eventstore.ResolvedEvent
+}
+
+func (m *emailVerificationOTPModel) handle(resolved eventstore.ResolvedEvent) {
+	switch resolved.Event.EventType {
+	case EmailVerificationOTPGenerated:
+		expiresAt, _ := resolved.Event.Data["expiresAt"].(string)
+		parsed, err := time.Parse(time.RFC3339, expiresAt)
+		if err == nil {
+			m.latestOTPExpiresAt = parsed
+		}
+	case EmailVerificationOTPValidated:
+		m.emailValidated = true
+	}
+	if resolved.Position.After(m.position) {
+		m.position = resolved.Position
+	}
+	m.eventsHandled = append(m.eventsHandled, resolved)
 }
 
 type latestOTP struct {
@@ -389,28 +432,22 @@ func latestEmailVerificationOTP(events []eventstore.ResolvedEvent) latestOTP {
 }
 
 func (s *Service) emailVerificationOTPContext(ctx context.Context, userRegisteredID string) (emailVerificationOTPModel, error) {
-	query := eventstore.Query{Criteria: []eventstore.Criterion{
-		{Tags: []eventstore.Tag{{Key: "eventType", Value: EmailVerificationOTPGenerated}, {Key: ScopeUserRegisteredIDField, Value: userRegisteredID}}},
-		{Tags: []eventstore.Tag{{Key: "eventType", Value: EmailVerificationOTPValidated}, {Key: ScopeUserRegisteredIDField, Value: userRegisteredID}}},
-	}}
-	events, err := s.retriever.GetEvents(ctx, eventstore.NoEventPosition, 20, eventstore.Forward, query)
+	events, err := s.retriever.GetEvents(ctx, eventstore.LastEventPosition, 1, eventstore.Backward, emailVerificationOTPStateQuery(userRegisteredID))
 	if err != nil {
 		return emailVerificationOTPModel{}, err
 	}
-	model := emailVerificationOTPModel{}
+	model := emailVerificationOTPModel{position: eventstore.NoEventPosition}
 	for _, resolved := range events {
-		switch resolved.Event.EventType {
-		case EmailVerificationOTPGenerated:
-			expiresAt, _ := resolved.Event.Data["expiresAt"].(string)
-			parsed, err := time.Parse(time.RFC3339, expiresAt)
-			if err == nil && parsed.After(model.latestOTPExpiresAt) {
-				model.latestOTPExpiresAt = parsed
-			}
-		case EmailVerificationOTPValidated:
-			model.emailValidated = true
-		}
+		model.handle(resolved)
 	}
 	return model, nil
+}
+
+func emailVerificationOTPStateQuery(userRegisteredID string) eventstore.Query {
+	return eventstore.Query{Criteria: []eventstore.Criterion{
+		{Tags: []eventstore.Tag{{Key: "eventType", Value: EmailVerificationOTPGenerated}, {Key: ScopeUserRegisteredIDField, Value: userRegisteredID}}},
+		{Tags: []eventstore.Tag{{Key: "eventType", Value: EmailVerificationOTPValidated}, {Key: ScopeUserRegisteredIDField, Value: userRegisteredID}}},
+	}}
 }
 
 func (s *Service) ChangePassword(ctx context.Context, user views.User, currentPassword, newPassword string) error {
