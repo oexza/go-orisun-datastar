@@ -27,8 +27,33 @@ type MessageSubscriber interface {
 	Subscribe(ctx context.Context, subject string, handle func(context.Context, []byte)) (eventstore.MessageSubscription, error)
 }
 
+type AccountCommands interface {
+	Register(ctx context.Context, input auth.RegisterInput) (views.User, error)
+	GenerateEmailVerificationOTPWithMetadata(ctx context.Context, user views.User, metadata auth.CommandMetadata) error
+	ValidateOTPWithMetadata(ctx context.Context, userID, code string, metadata auth.CommandMetadata) error
+	RequestPasswordResetWithMetadata(ctx context.Context, emailAddress string, metadata auth.CommandMetadata) error
+	ResetPasswordWithMetadata(ctx context.Context, token, password string, metadata auth.CommandMetadata) error
+	ChangePasswordWithMetadata(ctx context.Context, user views.User, currentPassword, newPassword string, metadata auth.CommandMetadata) error
+	UpdateNameWithMetadata(ctx context.Context, user views.User, name string, metadata auth.CommandMetadata) error
+}
+
+type SessionManager interface {
+	Login(ctx context.Context, emailAddress, password string) (views.User, string, error)
+	Logout(ctx context.Context, token string) error
+	CurrentUser(ctx context.Context, r *http.Request) (views.User, bool, error)
+	SetSessionCookie(w http.ResponseWriter, token string)
+	ClearSessionCookie(w http.ResponseWriter)
+	SessionCookieName() string
+}
+
+type AuthUserReader interface {
+	UserByIDOrRegisteredID(ctx context.Context, id string) (views.User, error)
+}
+
 type Server struct {
-	Auth           *auth.Service
+	Accounts       AccountCommands
+	Sessions       SessionManager
+	AuthUsers      AuthUserReader
 	Todos          todo.TodoReadModelReader
 	EventSaver     eventstore.Saver
 	EventRetriever eventstore.Retriever
@@ -84,7 +109,7 @@ func render(component interface {
 
 func (s Server) requireVerifiedEmail(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user, ok, err := s.Auth.CurrentUser(r.Context(), r)
+		user, ok, err := s.Sessions.CurrentUser(r.Context(), r)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -107,7 +132,7 @@ func currentUser(r *http.Request) views.User {
 }
 
 func (s Server) sessionID(r *http.Request) string {
-	cookie, err := r.Cookie(s.Auth.SessionCookieName())
+	cookie, err := r.Cookie(s.Sessions.SessionCookieName())
 	if err == nil && cookie.Value != "" {
 		return cookie.Value
 	}

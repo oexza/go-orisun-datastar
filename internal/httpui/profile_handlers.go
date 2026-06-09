@@ -42,7 +42,7 @@ func (s Server) updateBio(w http.ResponseWriter, r *http.Request) {
 		User:     user,
 		Bio:      r.FormValue("bio"),
 		Metadata: eventstore.HTTPCommandMetadata(r, user.UserRegisteredID),
-	}, s.EventSaver)
+	}, s.EventSaver, s.EventRetriever)
 	if err != nil {
 		patchTempl(w, r, views.ProfileEditPanel(user, map[string]string{"bio": err.Error()}), datastar.WithSelectorID("profile-edit-page"))
 		return
@@ -71,7 +71,7 @@ func (s Server) uploadImage(w http.ResponseWriter, r *http.Request, header bool)
 		ContentType: contentType,
 		Header:      header,
 		Metadata:    eventstore.HTTPCommandMetadata(r, user.UserRegisteredID),
-	}, s.EventSaver, s.ProfileStorage); err != nil {
+	}, s.EventSaver, s.EventRetriever, s.ProfileStorage); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -81,7 +81,7 @@ func (s Server) uploadImage(w http.ResponseWriter, r *http.Request, header bool)
 func (s Server) updateName(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	user := currentUser(r)
-	err := s.Auth.UpdateNameWithMetadata(r.Context(), user, r.FormValue("name"), eventstore.HTTPCommandMetadata(r, user.UserRegisteredID))
+	err := s.Accounts.UpdateNameWithMetadata(r.Context(), user, r.FormValue("name"), eventstore.HTTPCommandMetadata(r, user.UserRegisteredID))
 	writeSSE(w, r, func(sse *datastar.ServerSentEventGenerator) error {
 		if err != nil {
 			return alert(sse, err.Error())
@@ -93,7 +93,7 @@ func (s Server) updateName(w http.ResponseWriter, r *http.Request) {
 func (s Server) changePassword(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	user := currentUser(r)
-	err := s.Auth.ChangePasswordWithMetadata(r.Context(), user, r.FormValue("currentPassword"), r.FormValue("newPassword"), eventstore.HTTPCommandMetadata(r, user.UserRegisteredID))
+	err := s.Accounts.ChangePasswordWithMetadata(r.Context(), user, r.FormValue("currentPassword"), r.FormValue("newPassword"), eventstore.HTTPCommandMetadata(r, user.UserRegisteredID))
 	writeSSE(w, r, func(sse *datastar.ServerSentEventGenerator) error {
 		if err != nil {
 			return alert(sse, err.Error())

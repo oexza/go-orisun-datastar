@@ -33,7 +33,9 @@ type runOptions struct {
 }
 
 type appComponents struct {
-	authService      *auth.Service
+	accountCommands  *auth.AccountCommands
+	sessionManager   *auth.SessionManager
+	authUsers        *auth.AuthUserStore
 	todoReadModel    *todo.ReadModel
 	profileReadModel *profile.ReadModel
 	checkpointer     eventstore.Checkpointer
@@ -110,7 +112,9 @@ func run(ctx context.Context, stop context.CancelFunc, cfg config.Config, opts r
 	defer stopEventHandlers(handlers)
 
 	app := httpui.Server{
-		Auth:           components.authService,
+		Accounts:       components.accountCommands,
+		Sessions:       components.sessionManager,
+		AuthUsers:      components.authUsers,
 		Todos:          components.todoReadModel,
 		EventSaver:     orisunStore,
 		EventRetriever: orisunStore,
@@ -154,13 +158,17 @@ func newViewStore(bus *natsbus.Bus, logger *slog.Logger) viewstore.Store {
 }
 
 func newAppComponents(db *pgxpool.Pool, store *eventstore.EmbeddedOrisun, cfg config.Config, logger *slog.Logger) appComponents {
-	authService := auth.NewService(db, store, store, !cfg.DevelopmentCookie)
+	authUsers := auth.NewAuthUserStore(db)
+	accountCommands := auth.NewAccountCommands(db, authUsers, store, store)
+	sessionManager := auth.NewSessionManager(db, authUsers, !cfg.DevelopmentCookie)
 	todoReadModel := todo.NewReadModel(db)
 	profileReadModel := profile.NewReadModel(db)
 	profileStorage := storage.NewLocalProvider(cfg.UploadDir, cfg.UploadBaseURL)
 
 	return appComponents{
-		authService:      authService,
+		accountCommands:  accountCommands,
+		sessionManager:   sessionManager,
+		authUsers:        authUsers,
 		todoReadModel:    todoReadModel,
 		profileReadModel: profileReadModel,
 		checkpointer:     eventstore.NewPostgresCheckpointer(db),
@@ -174,7 +182,7 @@ func eventHandlerFactories(store *eventstore.EmbeddedOrisun, bus *natsbus.Bus, c
 		{
 			name: "registration OTP",
 			create: func() (eventHandler, error) {
-				return auth.NewRegistrationOTPToBeGeneratedEventHandler(store, components.checkpointer, components.authService, logger)
+				return auth.NewRegistrationOTPToBeGeneratedEventHandler(store, components.checkpointer, components.accountCommands, logger)
 			},
 		},
 		{
@@ -192,7 +200,7 @@ func eventHandlerFactories(store *eventstore.EmbeddedOrisun, bus *natsbus.Bus, c
 		{
 			name: "auth user projection",
 			create: func() (eventHandler, error) {
-				return auth.NewAuthUserProjectionEventHandler(store, components.checkpointer, store, components.authService, logger)
+				return auth.NewAuthUserProjectionEventHandler(store, components.checkpointer, store, components.authUsers, logger)
 			},
 		},
 		{
@@ -204,7 +212,7 @@ func eventHandlerFactories(store *eventstore.EmbeddedOrisun, bus *natsbus.Bus, c
 		{
 			name: "profile image auth user bridge",
 			create: func() (eventHandler, error) {
-				return profile.NewProfileImageUploadedAuthUserEventHandler(store, components.checkpointer, components.authService, logger)
+				return profile.NewProfileImageUploadedAuthUserEventHandler(store, components.checkpointer, components.authUsers, logger)
 			},
 		},
 		{

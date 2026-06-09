@@ -6,11 +6,9 @@ import (
 	"encoding/base64"
 	"errors"
 	"math/big"
-	"net/http"
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
@@ -21,24 +19,16 @@ import (
 	"github.com/oexza/go-orisun-datastar/internal/views"
 )
 
-type Service struct {
-	db            *pgxpool.Pool
-	queries       *dbsql.Queries
-	store         eventstore.Saver
-	retriever     eventstore.Retriever
-	secureCookie  bool
-	sessionCookie string
+type AccountCommands struct {
+	db        *pgxpool.Pool
+	queries   *dbsql.Queries
+	users     *AuthUserStore
+	store     eventstore.Saver
+	retriever eventstore.Retriever
 }
 
-func NewService(db *pgxpool.Pool, saver eventstore.Saver, retriever eventstore.Retriever, secureCookie bool) *Service {
-	return &Service{
-		db:            db,
-		queries:       dbsql.New(db),
-		store:         saver,
-		retriever:     retriever,
-		secureCookie:  secureCookie,
-		sessionCookie: "go-event-starter-session",
-	}
+func NewAccountCommands(db *pgxpool.Pool, users *AuthUserStore, saver eventstore.Saver, retriever eventstore.Retriever) *AccountCommands {
+	return &AccountCommands{db: db, queries: dbsql.New(db), users: users, store: saver, retriever: retriever}
 }
 
 type RegisterInput struct {
@@ -51,42 +41,34 @@ type RegisterInput struct {
 	Metadata    CommandMetadata
 }
 
-func (s *Service) Register(ctx context.Context, input RegisterInput) (views.User, error) {
+func (s *AccountCommands) Register(ctx context.Context, input RegisterInput) (views.User, error) {
 	return s.RegisterWithMetadata(ctx, input, input.Metadata)
 }
 
-func (s *Service) RegisterWithMetadata(ctx context.Context, input RegisterInput, metadata CommandMetadata) (views.User, error) {
-	input.Username = strings.TrimSpace(input.Username)
-	input.Email = strings.ToLower(strings.TrimSpace(input.Email))
-	if len(input.Username) < 4 || input.Email == "" || len(input.Password) < 6 {
+func (s *AccountCommands) RegisterWithMetadata(ctx context.Context, input RegisterInput, metadata CommandMetadata) (views.User, error) {
+	if len(input.Password) < 6 {
 		return views.User{}, errors.New("invalid registration input")
 	}
 
-	query := eventstore.Query{Criteria: []eventstore.Criterion{
-		{Tags: []eventstore.Tag{{Key: "eventType", Value: UserRegistered}, {Key: UserRegisteredUsernameField, Value: input.Username}}},
-		{Tags: []eventstore.Tag{{Key: "eventType", Value: UserRegistered}, {Key: UserRegisteredEmailField, Value: input.Email}}},
-	}}
-	existing, err := s.retriever.GetEvents(ctx, eventstore.NoEventPosition, 1, eventstore.Forward, query)
+	registered, err := RegisterUserCommandHandler(ctx, RegisterUserCommand{
+		Username:    input.Username,
+		Email:       input.Email,
+		FirstName:   input.FirstName,
+		LastName:    input.LastName,
+		YearOfBirth: input.YearOfBirth,
+		Metadata:    metadata,
+	}, s.store, s.retriever)
 	if err != nil {
 		return views.User{}, err
 	}
-	if len(existing) > 0 {
-		return views.User{}, errors.New("user already exists")
-	}
 
-	userRegisteredID := uuidv7.NewString()
 	userID := uuidv7.NewString()
 	hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return views.User{}, err
 	}
 
-	event := NewUserRegisteredEvent(userRegisteredID, input.Username, input.Email, strings.TrimSpace(input.FirstName), strings.TrimSpace(input.LastName), input.YearOfBirth, metadata)
-	if _, err := s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, query); err != nil {
-		return views.User{}, err
-	}
-
-	name := strings.TrimSpace(input.FirstName + " " + input.LastName)
+	name := strings.TrimSpace(registered.FirstName + " " + registered.LastName)
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return views.User{}, err
@@ -97,15 +79,15 @@ func (s *Service) RegisterWithMetadata(ctx context.Context, input RegisterInput,
 	if err := qtx.CreateAuthUser(ctx, dbsql.CreateAuthUserParams{
 		ID:               userID,
 		Name:             name,
-		Email:            input.Email,
-		Username:         stringPtr(input.Username),
-		UserRegisteredID: userRegisteredID,
+		Email:            registered.Email,
+		Username:         stringPtr(registered.Username),
+		UserRegisteredID: registered.UserRegisteredID,
 	}); err != nil {
 		return views.User{}, err
 	}
 	if err := qtx.CreateAuthAccount(ctx, dbsql.CreateAuthAccountParams{
 		ID:        uuidv7.NewString(),
-		AccountID: input.Email,
+		AccountID: registered.Email,
 		UserID:    userID,
 		Password:  stringPtr(string(hash)),
 	}); err != nil {
@@ -115,234 +97,88 @@ func (s *Service) RegisterWithMetadata(ctx context.Context, input RegisterInput,
 		return views.User{}, err
 	}
 
-	user := views.User{ID: userID, UserRegisteredID: userRegisteredID, Name: name, Username: input.Username, Email: input.Email}
+	user := views.User{ID: userID, UserRegisteredID: registered.UserRegisteredID, Name: name, Username: registered.Username, Email: registered.Email}
 	return user, nil
 }
 
-func (s *Service) Login(ctx context.Context, emailAddress, password string) (views.User, string, error) {
-	user, hash, err := s.userByEmailWithPassword(ctx, strings.ToLower(strings.TrimSpace(emailAddress)))
-	if err != nil {
-		return views.User{}, "", errors.New("invalid email or password")
-	}
-	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)); err != nil {
-		return views.User{}, "", errors.New("invalid email or password")
-	}
-	token, err := randomToken(32)
-	if err != nil {
-		return views.User{}, "", err
-	}
-	err = s.queries.CreateAuthSession(ctx, dbsql.CreateAuthSessionParams{
-		ID:        uuidv7.NewString(),
-		Token:     token,
-		UserID:    user.ID,
-		ExpiresAt: pgTime(time.Now().Add(90 * 24 * time.Hour)),
-	})
-	return user, token, err
-}
-
-func (s *Service) Logout(ctx context.Context, token string) error {
-	return s.queries.DeleteAuthSessionByToken(ctx, token)
-}
-
-func (s *Service) CurrentUser(ctx context.Context, r *http.Request) (views.User, bool, error) {
-	cookie, err := r.Cookie(s.sessionCookie)
-	if err != nil || cookie.Value == "" {
-		return views.User{}, false, nil
-	}
-	user, err := s.UserBySessionToken(ctx, cookie.Value)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return views.User{}, false, nil
-		}
-		return views.User{}, false, err
-	}
-	return user, true, nil
-}
-
-func (s *Service) UserBySessionToken(ctx context.Context, token string) (views.User, error) {
-	row, err := s.queries.UserBySessionToken(ctx, token)
-	if err != nil {
-		return views.User{}, err
-	}
-	return userFromSessionRow(row), nil
-}
-
-func (s *Service) UserByRegisteredID(ctx context.Context, userRegisteredID string) (views.User, error) {
-	row, err := s.queries.UserByRegisteredID(ctx, userRegisteredID)
-	if err != nil {
-		return views.User{}, err
-	}
-	return userFromRegisteredRow(row), nil
-}
-
-func (s *Service) UserByIDOrRegisteredID(ctx context.Context, id string) (views.User, error) {
-	row, err := s.queries.UserByIDOrRegisteredID(ctx, id)
-	if err != nil {
-		return views.User{}, err
-	}
-	return userFromIDOrRegisteredRow(row), nil
-}
-
-func (s *Service) GenerateEmailVerificationOTP(ctx context.Context, user views.User) error {
+func (s *AccountCommands) GenerateEmailVerificationOTP(ctx context.Context, user views.User) error {
 	return s.generateEmailVerificationOTP(ctx, user, nil)
 }
 
-func (s *Service) GenerateEmailVerificationOTPWithMetadata(ctx context.Context, user views.User, metadata CommandMetadata) error {
+func (s *AccountCommands) GenerateEmailVerificationOTPWithMetadata(ctx context.Context, user views.User, metadata CommandMetadata) error {
 	return s.generateEmailVerificationOTP(ctx, user, metadata)
 }
 
-func (s *Service) generateEmailVerificationOTP(ctx context.Context, user views.User, metadata CommandMetadata) error {
-	userQuery := userRegisteredQuery(user.UserRegisteredID)
-	userEvents, err := s.retriever.GetEvents(ctx, eventstore.NoEventPosition, 1, eventstore.Forward, userQuery)
+func (s *AccountCommands) generateEmailVerificationOTP(ctx context.Context, user views.User, metadata CommandMetadata) error {
+	result, err := GenerateEmailVerificationOTPCommandHandler(ctx, GenerateEmailVerificationOTPCommand{
+		User:     user,
+		Metadata: metadata,
+	}, s.store, s.retriever)
 	if err != nil {
 		return err
 	}
-	if len(userEvents) == 0 {
-		return errors.New("registered user event not found")
-	}
-
-	latestStateQuery := emailVerificationOTPStateQuery(user.UserRegisteredID)
-	latestEvents, err := s.retriever.GetEvents(ctx, eventstore.LastEventPosition, 1, eventstore.Backward, latestStateQuery)
-	if err != nil {
-		return err
-	}
-
-	model := emailVerificationOTPModel{position: eventstore.NoEventPosition}
-	for _, resolved := range append(userEvents, latestEvents...) {
-		model.handle(resolved)
-	}
-	if model.emailValidated {
+	if result.Skipped {
 		return nil
 	}
-	if model.latestOTPExpiresAt.After(time.Now()) {
-		return nil
-	}
-
-	code, err := numericCode(6)
-	if err != nil {
-		return err
-	}
-	otpID := uuidv7.NewString()
-	expiresAt := time.Now().Add(15 * time.Minute)
-	query := emailVerificationOTPGeneratedQuery(otpID)
-	event := NewEmailVerificationOTPGeneratedEvent(otpID, code, expiresAt, user.UserRegisteredID, metadataWithQuery(metadata, query))
 	if err := s.queries.CreateAuthVerification(ctx, dbsql.CreateAuthVerificationParams{
-		ID:         otpID,
+		ID:         result.EmailVerificationOTPGeneratedID,
 		Identifier: "email:" + user.UserRegisteredID,
-		Value:      code,
-		ExpiresAt:  pgTime(expiresAt),
+		Value:      result.Code,
+		ExpiresAt:  pgTime(result.ExpiresAt),
 	}); err != nil {
-		return err
-	}
-	if _, err := s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, model.position, model.eventsHandled, combineQueries(userQuery, latestStateQuery)); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s *Service) UpdateImage(ctx context.Context, userRegisteredID, imageURL string) error {
-	return s.queries.UpdateAuthUserImage(ctx, dbsql.UpdateAuthUserImageParams{
-		Image:            stringPtr(imageURL),
-		UserRegisteredID: userRegisteredID,
-	})
-}
-
-func (s *Service) MarkEmailVerified(ctx context.Context, userRegisteredID string) error {
-	return s.queries.MarkAuthUserEmailVerified(ctx, userRegisteredID)
-}
-
-func (s *Service) ValidateOTP(ctx context.Context, userID, code string) error {
+func (s *AccountCommands) ValidateOTP(ctx context.Context, userID, code string) error {
 	return s.ValidateOTPWithMetadata(ctx, userID, code, nil)
 }
 
-func (s *Service) ValidateOTPWithMetadata(ctx context.Context, userID, code string, metadata CommandMetadata) error {
-	user, err := s.UserByIDOrRegisteredID(ctx, userID)
+func (s *AccountCommands) ValidateOTPWithMetadata(ctx context.Context, userID, code string, metadata CommandMetadata) error {
+	user, err := s.users.UserByIDOrRegisteredID(ctx, userID)
 	if err != nil {
 		return err
 	}
-
-	generatedQuery := eventstore.Query{Criteria: []eventstore.Criterion{{Tags: []eventstore.Tag{
-		{Key: "eventType", Value: EmailVerificationOTPGenerated},
-		{Key: ScopeUserRegisteredIDField, Value: user.UserRegisteredID},
-	}}}}
-	generatedEvents, err := s.retriever.GetEvents(ctx, eventstore.LastEventPosition, 1, eventstore.Backward, generatedQuery)
-	if err != nil {
-		return err
-	}
-	otp := latestEmailVerificationOTP(generatedEvents)
-	if otp.id == "" {
-		return errors.New("no verification code found")
-	}
-	if otp.code != strings.TrimSpace(code) || !otp.expiresAt.After(time.Now()) {
-		return errors.New("invalid or expired verification code")
-	}
-
-	validationQuery := emailVerificationOTPValidatedQuery(otp.id)
-	validationEvents, err := s.retriever.GetEvents(ctx, eventstore.NoEventPosition, 1, eventstore.Forward, validationQuery)
-	if err != nil {
-		return err
-	}
-	if len(validationEvents) > 0 {
-		return errors.New("verification code already validated")
-	}
-
-	userQuery := userRegisteredQuery(user.UserRegisteredID)
-	userEvents, err := s.retriever.GetEvents(ctx, eventstore.NoEventPosition, 1, eventstore.Forward, userQuery)
-	if err != nil {
-		return err
-	}
-	if len(userEvents) == 0 {
-		return errors.New("registered user event not found")
-	}
-
-	validationID := uuidv7.NewString()
-	event := NewEmailVerificationOTPValidatedEvent(validationID, time.Now(), otp.id, user.UserRegisteredID, metadataWithQuery(metadata, combineQueries(generatedQuery, validationQuery)))
-	modelPosition := eventstore.NoEventPosition
-	handledEvents := append(append(generatedEvents, validationEvents...), userEvents...)
-	for _, resolved := range handledEvents {
-		if resolved.Position.After(modelPosition) {
-			modelPosition = resolved.Position
-		}
-	}
-	_, err = s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, modelPosition, handledEvents, combineQueries(generatedQuery, validationQuery, userQuery))
-	return err
+	return ValidateEmailVerificationOTPCommandHandler(ctx, ValidateEmailVerificationOTPCommand{
+		User:     user,
+		Code:     code,
+		Metadata: metadata,
+	}, s.store, s.retriever)
 }
 
-func (s *Service) RequestPasswordReset(ctx context.Context, emailAddress string) error {
+func (s *AccountCommands) RequestPasswordReset(ctx context.Context, emailAddress string) error {
 	return s.RequestPasswordResetWithMetadata(ctx, emailAddress, nil)
 }
 
-func (s *Service) RequestPasswordResetWithMetadata(ctx context.Context, emailAddress string, metadata CommandMetadata) error {
-	user, _, err := s.userByEmailWithPassword(ctx, strings.ToLower(strings.TrimSpace(emailAddress)))
+func (s *AccountCommands) RequestPasswordResetWithMetadata(ctx context.Context, emailAddress string, metadata CommandMetadata) error {
+	user, _, err := s.users.userByEmailWithPassword(ctx, strings.ToLower(strings.TrimSpace(emailAddress)))
 	if err != nil {
 		return nil
 	}
-	token, err := randomToken(32)
+	result, err := RequestPasswordResetCommandHandler(ctx, RequestPasswordResetCommand{
+		User:     user,
+		Metadata: metadata,
+	}, s.store, s.retriever)
 	if err != nil {
 		return err
 	}
-	requestID := uuidv7.NewString()
-	expiresAt := time.Now().Add(30 * time.Minute)
-	event := NewPasswordResetRequestedEvent(requestID, user.Email, token, expiresAt, user.UserRegisteredID, metadata)
 	if err := s.queries.CreateAuthVerification(ctx, dbsql.CreateAuthVerificationParams{
-		ID:         requestID,
+		ID:         result.PasswordResetRequestedID,
 		Identifier: "password-reset:" + user.ID,
-		Value:      token,
-		ExpiresAt:  pgTime(expiresAt),
+		Value:      result.Token,
+		ExpiresAt:  pgTime(result.ExpiresAt),
 	}); err != nil {
-		return err
-	}
-	if _, err := s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, passwordResetRequestedQuery(requestID)); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s *Service) ResetPassword(ctx context.Context, token, password string) error {
+func (s *AccountCommands) ResetPassword(ctx context.Context, token, password string) error {
 	return s.ResetPasswordWithMetadata(ctx, token, password, nil)
 }
 
-func (s *Service) ResetPasswordWithMetadata(ctx context.Context, token, password string, metadata CommandMetadata) error {
+func (s *AccountCommands) ResetPasswordWithMetadata(ctx context.Context, token, password string, metadata CommandMetadata) error {
 	if len(password) < 6 {
 		return errors.New("password must be at least 6 characters")
 	}
@@ -351,94 +187,26 @@ func (s *Service) ResetPasswordWithMetadata(ctx context.Context, token, password
 		return errors.New("invalid or expired reset token")
 	}
 	userID := strings.TrimPrefix(verification.Identifier, "password-reset:")
-	user, err := s.UserByIDOrRegisteredID(ctx, userID)
+	user, err := s.users.UserByIDOrRegisteredID(ctx, userID)
 	if err != nil {
 		return err
 	}
 	if err := s.setPassword(ctx, userID, password); err != nil {
 		return err
 	}
-	passwordResetCompletedID := uuidv7.NewString()
-	event := NewPasswordResetCompletedEvent(passwordResetCompletedID, time.Now(), verification.ID, user.UserRegisteredID, metadata)
-	_, err = s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, eventstore.Query{})
-	return err
+	return ResetPasswordCommandHandler(ctx, ResetPasswordCommand{
+		User:                     user,
+		PasswordResetRequestedID: verification.ID,
+		Metadata:                 metadata,
+	}, s.store, s.retriever)
 }
 
-type emailVerificationOTPModel struct {
-	emailValidated     bool
-	latestOTPExpiresAt time.Time
-	position           eventstore.Position
-	eventsHandled      []eventstore.ResolvedEvent
-}
-
-func (m *emailVerificationOTPModel) handle(resolved eventstore.ResolvedEvent) {
-	switch resolved.Event.EventType {
-	case EmailVerificationOTPGenerated:
-		expiresAt, _ := resolved.Event.Data["expiresAt"].(string)
-		parsed, err := time.Parse(time.RFC3339, expiresAt)
-		if err == nil {
-			m.latestOTPExpiresAt = parsed
-		}
-	case EmailVerificationOTPValidated:
-		m.emailValidated = true
-	}
-	if resolved.Position.After(m.position) {
-		m.position = resolved.Position
-	}
-	m.eventsHandled = append(m.eventsHandled, resolved)
-}
-
-type latestOTP struct {
-	id        string
-	code      string
-	expiresAt time.Time
-	position  eventstore.Position
-}
-
-func latestEmailVerificationOTP(events []eventstore.ResolvedEvent) latestOTP {
-	otp := latestOTP{position: eventstore.NoEventPosition}
-	for _, resolved := range events {
-		if !resolved.Position.After(otp.position) {
-			continue
-		}
-		expiresAt, _ := resolved.Event.Data["expiresAt"].(string)
-		parsed, err := time.Parse(time.RFC3339, expiresAt)
-		if err != nil {
-			continue
-		}
-		otp.id, _ = resolved.Event.Data["emailVerificationOTPGeneratedId"].(string)
-		otp.code, _ = resolved.Event.Data["otpCode"].(string)
-		otp.expiresAt = parsed
-		otp.position = resolved.Position
-	}
-	return otp
-}
-
-func (s *Service) emailVerificationOTPContext(ctx context.Context, userRegisteredID string) (emailVerificationOTPModel, error) {
-	events, err := s.retriever.GetEvents(ctx, eventstore.LastEventPosition, 1, eventstore.Backward, emailVerificationOTPStateQuery(userRegisteredID))
-	if err != nil {
-		return emailVerificationOTPModel{}, err
-	}
-	model := emailVerificationOTPModel{position: eventstore.NoEventPosition}
-	for _, resolved := range events {
-		model.handle(resolved)
-	}
-	return model, nil
-}
-
-func emailVerificationOTPStateQuery(userRegisteredID string) eventstore.Query {
-	return eventstore.Query{Criteria: []eventstore.Criterion{
-		{Tags: []eventstore.Tag{{Key: "eventType", Value: EmailVerificationOTPGenerated}, {Key: ScopeUserRegisteredIDField, Value: userRegisteredID}}},
-		{Tags: []eventstore.Tag{{Key: "eventType", Value: EmailVerificationOTPValidated}, {Key: ScopeUserRegisteredIDField, Value: userRegisteredID}}},
-	}}
-}
-
-func (s *Service) ChangePassword(ctx context.Context, user views.User, currentPassword, newPassword string) error {
+func (s *AccountCommands) ChangePassword(ctx context.Context, user views.User, currentPassword, newPassword string) error {
 	return s.ChangePasswordWithMetadata(ctx, user, currentPassword, newPassword, nil)
 }
 
-func (s *Service) ChangePasswordWithMetadata(ctx context.Context, user views.User, currentPassword, newPassword string, metadata CommandMetadata) error {
-	_, hash, err := s.userByEmailWithPassword(ctx, user.Email)
+func (s *AccountCommands) ChangePasswordWithMetadata(ctx context.Context, user views.User, currentPassword, newPassword string, metadata CommandMetadata) error {
+	_, hash, err := s.users.userByEmailWithPassword(ctx, user.Email)
 	if err != nil {
 		return err
 	}
@@ -448,42 +216,32 @@ func (s *Service) ChangePasswordWithMetadata(ctx context.Context, user views.Use
 	if err := s.setPassword(ctx, user.ID, newPassword); err != nil {
 		return err
 	}
-	passwordChangedID := uuidv7.NewString()
-	event := NewPasswordChangedEvent(passwordChangedID, time.Now(), user.UserRegisteredID, metadata)
-	_, err = s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, eventstore.Query{})
-	return err
+	return ChangePasswordCommandHandler(ctx, ChangePasswordCommand{
+		User:     user,
+		Metadata: metadata,
+	}, s.store, s.retriever)
 }
 
-func (s *Service) UpdateName(ctx context.Context, user views.User, name string) error {
+func (s *AccountCommands) UpdateName(ctx context.Context, user views.User, name string) error {
 	return s.UpdateNameWithMetadata(ctx, user, name, nil)
 }
 
-func (s *Service) UpdateNameWithMetadata(ctx context.Context, user views.User, name string, metadata CommandMetadata) error {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return errors.New("name is required")
-	}
-	userNameChangedID := uuidv7.NewString()
-	event := NewUserNameChangedEvent(userNameChangedID, name, time.Now(), user.UserRegisteredID, metadata)
-	if _, err := s.store.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, eventstore.Query{}); err != nil {
+func (s *AccountCommands) UpdateNameWithMetadata(ctx context.Context, user views.User, name string, metadata CommandMetadata) error {
+	result, err := UpdateUserNameCommandHandler(ctx, UpdateUserNameCommand{
+		User:     user,
+		Name:     name,
+		Metadata: metadata,
+	}, s.store, s.retriever)
+	if err != nil {
 		return err
 	}
-	return s.queries.UpdateAuthUserName(ctx, dbsql.UpdateAuthUserNameParams{Name: name, ID: user.ID})
+	if result.Skipped {
+		return nil
+	}
+	return s.queries.UpdateAuthUserName(ctx, dbsql.UpdateAuthUserNameParams{Name: result.Name, ID: user.ID})
 }
 
-func (s *Service) SetSessionCookie(w http.ResponseWriter, token string) {
-	http.SetCookie(w, &http.Cookie{Name: s.sessionCookie, Value: token, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: s.secureCookie, Expires: time.Now().Add(90 * 24 * time.Hour)})
-}
-
-func (s *Service) ClearSessionCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{Name: s.sessionCookie, Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: s.secureCookie, MaxAge: -1})
-}
-
-func (s *Service) SessionCookieName() string {
-	return s.sessionCookie
-}
-
-func (s *Service) setPassword(ctx context.Context, userID, password string) error {
+func (s *AccountCommands) setPassword(ctx context.Context, userID, password string) error {
 	if len(password) < 6 {
 		return errors.New("password must be at least 6 characters")
 	}
@@ -495,27 +253,6 @@ func (s *Service) setPassword(ctx context.Context, userID, password string) erro
 		Password: stringPtr(string(hash)),
 		UserID:   userID,
 	})
-}
-
-func (s *Service) userByEmailWithPassword(ctx context.Context, emailAddress string) (views.User, string, error) {
-	row, err := s.queries.UserByEmailWithPassword(ctx, emailAddress)
-	if err != nil {
-		return views.User{}, "", err
-	}
-	if row.Password == nil {
-		return views.User{}, "", pgx.ErrNoRows
-	}
-	return views.User{
-		ID:               row.ID,
-		UserRegisteredID: row.UserRegisteredID,
-		Name:             row.Name,
-		Username:         row.Username,
-		Email:            row.Email,
-		EmailVerified:    row.EmailVerified,
-		Image:            row.Image,
-		Bio:              row.Bio,
-		HeaderImageURL:   row.HeaderImageUrl,
-	}, *row.Password, nil
 }
 
 func userFromSessionRow(row dbsql.UserBySessionTokenRow) views.User {

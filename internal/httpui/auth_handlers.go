@@ -37,7 +37,7 @@ func (s Server) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	year, _ := strconv.Atoi(r.FormValue("yearOfBirth"))
-	user, err := s.Auth.Register(r.Context(), auth.RegisterInput{
+	user, err := s.Accounts.Register(r.Context(), auth.RegisterInput{
 		Username: r.FormValue("username"), Email: r.FormValue("email"), Password: r.FormValue("password"),
 		FirstName: r.FormValue("firstName"), LastName: r.FormValue("lastName"), YearOfBirth: year,
 		Metadata: eventstore.HTTPCommandMetadata(r, ""),
@@ -56,12 +56,12 @@ func (s Server) login(w http.ResponseWriter, r *http.Request) {
 		writeSSE(w, r, func(sse *datastar.ServerSentEventGenerator) error { return flashError(sse, err.Error()) })
 		return
 	}
-	user, token, err := s.Auth.Login(r.Context(), r.FormValue("email"), r.FormValue("password"))
+	user, token, err := s.Sessions.Login(r.Context(), r.FormValue("email"), r.FormValue("password"))
 	if err != nil {
 		patchTempl(w, r, views.LoginForm(map[string]string{"error": err.Error()}), datastar.WithSelectorID("auth-page"))
 		return
 	}
-	s.Auth.SetSessionCookie(w, token)
+	s.Sessions.SetSessionCookie(w, token)
 	path := "/todos"
 	if !user.EmailVerified {
 		path = "/register/" + user.ID + "/validate-email"
@@ -70,23 +70,23 @@ func (s Server) login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) logout(w http.ResponseWriter, r *http.Request) {
-	if cookie, err := r.Cookie(s.Auth.SessionCookieName()); err == nil {
-		_ = s.Auth.Logout(r.Context(), cookie.Value)
+	if cookie, err := r.Cookie(s.Sessions.SessionCookieName()); err == nil {
+		_ = s.Sessions.Logout(r.Context(), cookie.Value)
 	}
-	s.Auth.ClearSessionCookie(w)
+	s.Sessions.ClearSessionCookie(w)
 	http.Redirect(w, r, "/login", http.StatusFound)
 }
 
 func (s Server) forgotPassword(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
-	_ = s.Auth.RequestPasswordResetWithMetadata(r.Context(), r.FormValue("email"), eventstore.HTTPCommandMetadata(r, ""))
+	_ = s.Accounts.RequestPasswordResetWithMetadata(r.Context(), r.FormValue("email"), eventstore.HTTPCommandMetadata(r, ""))
 	writeSSE(w, r, func(sse *datastar.ServerSentEventGenerator) error { return sse.Redirect("/login") })
 }
 
 func (s Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	token := chi.URLParam(r, "token")
-	if err := s.Auth.ResetPasswordWithMetadata(r.Context(), token, r.FormValue("password"), eventstore.HTTPCommandMetadata(r, "")); err != nil {
+	if err := s.Accounts.ResetPasswordWithMetadata(r.Context(), token, r.FormValue("password"), eventstore.HTTPCommandMetadata(r, "")); err != nil {
 		patchTempl(w, r, views.ResetPasswordForm(token, map[string]string{"error": err.Error()}), datastar.WithSelectorID("auth-page"))
 		return
 	}
@@ -96,7 +96,7 @@ func (s Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 func (s Server) validateEmail(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	userID := chi.URLParam(r, "userID")
-	if err := s.Auth.ValidateOTPWithMetadata(r.Context(), userID, r.FormValue("otp"), eventstore.HTTPCommandMetadata(r, "")); err != nil {
+	if err := s.Accounts.ValidateOTPWithMetadata(r.Context(), userID, r.FormValue("otp"), eventstore.HTTPCommandMetadata(r, "")); err != nil {
 		patchTempl(w, r, views.ValidateEmailForm(userID, map[string]string{"error": err.Error()}), datastar.WithSelectorID("auth-page"))
 		return
 	}
@@ -105,9 +105,9 @@ func (s Server) validateEmail(w http.ResponseWriter, r *http.Request) {
 
 func (s Server) sendOTP(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "userID")
-	user, err := s.Auth.UserByIDOrRegisteredID(r.Context(), userID)
+	user, err := s.AuthUsers.UserByIDOrRegisteredID(r.Context(), userID)
 	if err == nil {
-		_ = s.Auth.GenerateEmailVerificationOTPWithMetadata(r.Context(), user, eventstore.HTTPCommandMetadata(r, user.UserRegisteredID))
+		_ = s.Accounts.GenerateEmailVerificationOTPWithMetadata(r.Context(), user, eventstore.HTTPCommandMetadata(r, user.UserRegisteredID))
 	}
 	writeSSE(w, r, func(sse *datastar.ServerSentEventGenerator) error {
 		return sse.Redirect("/register/" + userID + "/validate-email")

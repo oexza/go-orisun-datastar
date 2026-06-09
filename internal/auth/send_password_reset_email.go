@@ -24,6 +24,8 @@ type passwordResetEmailContext struct {
 	expiresAt   string
 	alreadySent bool
 	position    eventstore.Position
+	events      []eventstore.ResolvedEvent
+	query       eventstore.Query
 }
 
 func SendPasswordResetEmailCommandHandler(ctx context.Context, command SendPasswordResetEmailCommand, saver eventstore.Saver, retriever eventstore.Retriever, sender EmailSender, appURL string) error {
@@ -39,8 +41,13 @@ func SendPasswordResetEmailCommandHandler(ctx context.Context, command SendPassw
 		return err
 	}
 
-	model := passwordResetEmailContext{position: eventstore.NoEventPosition}
-	for _, resolved := range append(requestedEvents, sentEvents...) {
+	events := append(append([]eventstore.ResolvedEvent{}, requestedEvents...), sentEvents...)
+	model := passwordResetEmailContext{
+		position: eventstore.NoEventPosition,
+		events:   events,
+		query:    combineQueries(requestedQuery, sentQuery),
+	}
+	for _, resolved := range model.events {
 		model.handle(resolved)
 	}
 	if model.alreadySent {
@@ -60,8 +67,8 @@ func SendPasswordResetEmailCommandHandler(ctx context.Context, command SendPassw
 	}
 
 	id := uuidv7.NewString()
-	sent := NewPasswordResetEmailSentEvent(id, time.Now(), command.PasswordResetRequestedID, metadataWithQuery(command.Metadata, combineQueries(requestedQuery, sentQuery)))
-	_, err = saver.SaveEvents(ctx, []eventstore.DomainEvent{sent}, model.position, requestedEvents, combineQueries(requestedQuery, sentQuery))
+	sent := NewPasswordResetEmailSentEvent(id, time.Now(), command.PasswordResetRequestedID, metadataWithQuery(command.Metadata, model.query))
+	_, err = saver.SaveEvents(ctx, []eventstore.DomainEvent{sent}, model.position, model.events, model.query)
 	return err
 }
 

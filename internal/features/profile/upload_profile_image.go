@@ -25,12 +25,40 @@ type UploadProfileImageResult struct {
 	URL string
 }
 
-func UploadProfileImageCommandHandler(ctx context.Context, command UploadProfileImageCommand, saver eventstore.Saver, storage ObjectStore) (UploadProfileImageResult, error) {
+func UploadProfileImageCommandHandler(ctx context.Context, command UploadProfileImageCommand, saver eventstore.Saver, retriever eventstore.Retriever, storage ObjectStore) (UploadProfileImageResult, error) {
+	model, err := loadUploadProfileImageContext(ctx, command, retriever)
+	if err != nil {
+		return UploadProfileImageResult{}, err
+	}
+	if err := storage.PutObject(ctx, model.key, command.Data, command.ContentType); err != nil {
+		return UploadProfileImageResult{}, err
+	}
+	url := storage.PublicURL(model.key)
+	event := NewProfileImageUploadedEvent(model.eventID, url, time.Now(), command.User.UserRegisteredID, metadataWithQuery(command.Metadata, model.query))
+	if command.Header {
+		event = NewProfileHeaderImageUploadedEvent(model.eventID, url, time.Now(), command.User.UserRegisteredID, metadataWithQuery(command.Metadata, model.query))
+	}
+	if _, err := saver.SaveEvents(ctx, []eventstore.DomainEvent{event}, model.position, model.events, model.query); err != nil {
+		return UploadProfileImageResult{}, err
+	}
+	return UploadProfileImageResult{URL: url}, nil
+}
+
+type uploadProfileImageContext struct {
+	userExists bool
+	key        string
+	eventID    string
+	position   eventstore.Position
+	events     []eventstore.ResolvedEvent
+	query      eventstore.Query
+}
+
+func loadUploadProfileImageContext(ctx context.Context, command UploadProfileImageCommand, retriever eventstore.Retriever) (*uploadProfileImageContext, error) {
 	if len(command.Data) == 0 {
-		return UploadProfileImageResult{}, errors.New("missing image")
+		return nil, errors.New("missing image")
 	}
 	if len(command.Data) > 5*1024*1024 {
-		return UploadProfileImageResult{}, errors.New("image must be 5MB or smaller")
+		return nil, errors.New("image must be 5MB or smaller")
 	}
 	ext := extension(command.ContentType)
 	kind := "avatar"
@@ -39,20 +67,41 @@ func UploadProfileImageCommandHandler(ctx context.Context, command UploadProfile
 		kind = "header"
 		eventType = ProfileHeaderImageUploaded
 	}
+	userQuery := registeredUserQuery(command.User.UserRegisteredID)
+	imageQuery := profileUserEventQuery(eventType, command.User.UserRegisteredID)
+	query := combineQueries(userQuery, imageQuery)
 	key := filepath.ToSlash(fmt.Sprintf("profiles/%s/%s-%s.%s", command.User.UserRegisteredID, kind, uuidv7.NewString(), ext))
-	if err := storage.PutObject(ctx, key, command.Data, command.ContentType); err != nil {
-		return UploadProfileImageResult{}, err
-	}
-	url := storage.PublicURL(key)
 	eventID := uuidv7.NewString()
-	idField := ProfileImageUploadedIDField
-	event := NewProfileImageUploadedEvent(eventID, url, time.Now(), command.User.UserRegisteredID, command.Metadata)
-	if command.Header {
-		idField = ProfileHeaderImageUploadedIDField
-		event = NewProfileHeaderImageUploadedEvent(eventID, url, time.Now(), command.User.UserRegisteredID, command.Metadata)
+	model := &uploadProfileImageContext{
+		key:      key,
+		eventID:  eventID,
+		position: eventstore.NoEventPosition,
+		query:    query,
 	}
-	if _, err := saver.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, profileEventQuery(eventType, idField, eventID)); err != nil {
-		return UploadProfileImageResult{}, err
+	userEvents, err := retriever.GetEvents(ctx, eventstore.LastEventPosition, 1, eventstore.Backward, userQuery)
+	if err != nil {
+		return nil, err
 	}
-	return UploadProfileImageResult{URL: url}, nil
+	imageEvents, err := retriever.GetEvents(ctx, eventstore.LastEventPosition, 1, eventstore.Backward, imageQuery)
+	if err != nil {
+		return nil, err
+	}
+	model.events = append(append([]eventstore.ResolvedEvent{}, userEvents...), imageEvents...)
+	for _, event := range model.events {
+		model.handle(event)
+	}
+	if !model.userExists {
+		return nil, eventstore.ErrNotFound
+	}
+	return model, nil
+}
+
+func (m *uploadProfileImageContext) handle(resolved eventstore.ResolvedEvent) {
+	switch resolved.Event.EventType {
+	case "UserRegistered":
+		m.userExists = true
+	}
+	if resolved.Position.After(m.position) {
+		m.position = resolved.Position
+	}
 }

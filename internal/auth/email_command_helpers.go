@@ -9,10 +9,30 @@ func userRegisteredQuery(userRegisteredID string) eventstore.Query {
 	}}}}
 }
 
+func userRegisteredByUsernameOrEmailQuery(username, email string) eventstore.Query {
+	return eventstore.Query{Criteria: []eventstore.Criterion{
+		{Tags: []eventstore.Tag{
+			{Key: "eventType", Value: UserRegistered},
+			{Key: UserRegisteredUsernameField, Value: username},
+		}},
+		{Tags: []eventstore.Tag{
+			{Key: "eventType", Value: UserRegistered},
+			{Key: UserRegisteredEmailField, Value: email},
+		}},
+	}}
+}
+
 func emailVerificationOTPGeneratedQuery(otpID string) eventstore.Query {
 	return eventstore.Query{Criteria: []eventstore.Criterion{{Tags: []eventstore.Tag{
 		{Key: "eventType", Value: EmailVerificationOTPGenerated},
 		{Key: EmailVerificationOTPGeneratedIDField, Value: otpID},
+	}}}}
+}
+
+func emailVerificationOTPGeneratedByUserQuery(userRegisteredID string) eventstore.Query {
+	return eventstore.Query{Criteria: []eventstore.Criterion{{Tags: []eventstore.Tag{
+		{Key: "eventType", Value: EmailVerificationOTPGenerated},
+		{Key: ScopeUserRegisteredIDField, Value: userRegisteredID},
 	}}}}
 }
 
@@ -42,6 +62,34 @@ func passwordResetEmailSentQuery(requestID string) eventstore.Query {
 		{Key: "eventType", Value: PasswordResetEmailSent},
 		{Key: ScopePasswordResetRequestedIDField, Value: requestID},
 	}}}}
+}
+
+func passwordResetCompletedQuery(requestID string) eventstore.Query {
+	return eventstore.Query{Criteria: []eventstore.Criterion{{Tags: []eventstore.Tag{
+		{Key: "eventType", Value: PasswordResetCompleted},
+		{Key: ScopePasswordResetRequestedIDField, Value: requestID},
+	}}}}
+}
+
+func passwordChangedByUserQuery(userRegisteredID string) eventstore.Query {
+	return eventstore.Query{Criteria: []eventstore.Criterion{{Tags: []eventstore.Tag{
+		{Key: "eventType", Value: PasswordChanged},
+		{Key: ScopeUserRegisteredIDField, Value: userRegisteredID},
+	}}}}
+}
+
+func userNameChangedByUserQuery(userRegisteredID string) eventstore.Query {
+	return eventstore.Query{Criteria: []eventstore.Criterion{{Tags: []eventstore.Tag{
+		{Key: "eventType", Value: UserNameChanged},
+		{Key: ScopeUserRegisteredIDField, Value: userRegisteredID},
+	}}}}
+}
+
+func emailVerificationOTPStateQuery(userRegisteredID string) eventstore.Query {
+	return eventstore.Query{Criteria: []eventstore.Criterion{
+		{Tags: []eventstore.Tag{{Key: "eventType", Value: EmailVerificationOTPGenerated}, {Key: ScopeUserRegisteredIDField, Value: userRegisteredID}}},
+		{Tags: []eventstore.Tag{{Key: "eventType", Value: EmailVerificationOTPValidated}, {Key: ScopeUserRegisteredIDField, Value: userRegisteredID}}},
+	}}
 }
 
 func combineQueries(queries ...eventstore.Query) eventstore.Query {

@@ -38,11 +38,10 @@ func RenameTodoCommandHandler(ctx context.Context, command RenameTodoCommand, sa
 		return RenameTodoResult{Skipped: true}, nil
 	}
 
-	query := streamQuery(command.TodoID, command.UserRegisteredID)
 	eventID := uuidv7.NewString()
-	event := NewTodoRenamedEvent(eventID, command.TodoID, command.UserRegisteredID, title, time.Now(), metadataWithQuery(command.Metadata, query))
+	event := NewTodoRenamedEvent(eventID, command.TodoID, command.UserRegisteredID, title, time.Now(), metadataWithQuery(command.Metadata, model.query))
 
-	if _, err := saver.SaveEvents(ctx, []eventstore.DomainEvent{event}, model.position, model.events, query); err != nil {
+	if _, err := saver.SaveEvents(ctx, []eventstore.DomainEvent{event}, model.position, model.events, model.query); err != nil {
 		return RenameTodoResult{}, err
 	}
 	return RenameTodoResult{TodoRenamedID: eventID}, nil
@@ -54,6 +53,7 @@ type renameTodoContext struct {
 	title    string
 	position eventstore.Position
 	events   []eventstore.ResolvedEvent
+	query    eventstore.Query
 }
 
 func loadRenameTodoContext(ctx context.Context, retriever eventstore.Retriever, todoID, userRegisteredID string) (*renameTodoContext, error) {
@@ -63,7 +63,7 @@ func loadRenameTodoContext(ctx context.Context, retriever eventstore.Retriever, 
 		return nil, err
 	}
 
-	model := &renameTodoContext{position: eventstore.NoEventPosition, events: events}
+	model := &renameTodoContext{position: eventstore.NoEventPosition, events: events, query: query}
 	for _, event := range events {
 		model.handle(event)
 	}
