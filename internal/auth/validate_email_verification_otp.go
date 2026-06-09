@@ -1,0 +1,127 @@
+package auth
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"time"
+
+	"github.com/oexza/go-orisun-datastar/internal/eventstore"
+	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
+	"github.com/oexza/go-orisun-datastar/internal/views"
+)
+
+type ValidateEmailVerificationOTPCommand struct {
+	User     views.User
+	Code     string
+	Metadata CommandMetadata
+}
+
+func ValidateEmailVerificationOTPCommandHandler(ctx context.Context, command ValidateEmailVerificationOTPCommand, saver eventstore.Saver, retriever eventstore.Retriever) error {
+	model, err := loadValidateEmailVerificationOTPContext(ctx, command, retriever)
+	if err != nil {
+		return err
+	}
+	if !model.userExists {
+		return errors.New("registered user event not found")
+	}
+	if model.otpID == "" {
+		return errors.New("no verification code found")
+	}
+	if model.code != strings.TrimSpace(command.Code) || !model.expiresAt.After(time.Now()) {
+		return errors.New("invalid or expired verification code")
+	}
+	if model.alreadyValidated {
+		return errors.New("verification code already validated")
+	}
+
+	validationID := uuidv7.NewString()
+	event := NewEmailVerificationOTPValidatedEvent(validationID, time.Now(), model.otpID, command.User.UserRegisteredID, metadataWithQuery(command.Metadata, model.query))
+	_, err = saver.SaveEvents(ctx, []eventstore.DomainEvent{event}, model.position, model.events, model.query)
+	return err
+}
+
+type validateEmailVerificationOTPContext struct {
+	userExists       bool
+	otpID            string
+	code             string
+	expiresAt        time.Time
+	alreadyValidated bool
+	position         eventstore.Position
+	events           []eventstore.ResolvedEvent
+	query            eventstore.Query
+}
+
+type latestOTP struct {
+	id        string
+	code      string
+	expiresAt time.Time
+	position  eventstore.Position
+}
+
+func latestEmailVerificationOTP(events []eventstore.ResolvedEvent) latestOTP {
+	otp := latestOTP{position: eventstore.NoEventPosition}
+	for _, resolved := range events {
+		if !resolved.Position.After(otp.position) {
+			continue
+		}
+		expiresAt, _ := resolved.Event.Data[EmailVerificationOTPExpiresAtField].(string)
+		parsed, err := time.Parse(time.RFC3339, expiresAt)
+		if err != nil {
+			continue
+		}
+		otp.id, _ = resolved.Event.Data[EmailVerificationOTPGeneratedIDField].(string)
+		otp.code, _ = resolved.Event.Data[EmailVerificationOTPCodeField].(string)
+		otp.expiresAt = parsed
+		otp.position = resolved.Position
+	}
+	return otp
+}
+
+func loadValidateEmailVerificationOTPContext(ctx context.Context, command ValidateEmailVerificationOTPCommand, retriever eventstore.Retriever) (*validateEmailVerificationOTPContext, error) {
+	generatedQuery := emailVerificationOTPGeneratedByUserQuery(command.User.UserRegisteredID)
+	generatedEvents, err := retriever.GetEvents(ctx, eventstore.LastEventPosition, 1, eventstore.Backward, generatedQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	otp := latestEmailVerificationOTP(generatedEvents)
+	validationQuery := emailVerificationOTPValidatedQuery(otp.id)
+	validationEvents, err := retriever.GetEvents(ctx, eventstore.NoEventPosition, 1, eventstore.Forward, validationQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	userQuery := userRegisteredQuery(command.User.UserRegisteredID)
+	userEvents, err := retriever.GetEvents(ctx, eventstore.NoEventPosition, 1, eventstore.Forward, userQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	events := append(append([]eventstore.ResolvedEvent{}, generatedEvents...), validationEvents...)
+	events = append(events, userEvents...)
+	model := &validateEmailVerificationOTPContext{
+		otpID:     otp.id,
+		code:      otp.code,
+		expiresAt: otp.expiresAt,
+		position:  eventstore.NoEventPosition,
+		events:    events,
+		query:     combineQueries(generatedQuery, validationQuery, userQuery),
+	}
+	for _, event := range events {
+		model.handle(event)
+	}
+	return model, nil
+}
+
+func (m *validateEmailVerificationOTPContext) handle(resolved eventstore.ResolvedEvent) {
+	switch resolved.Event.EventType {
+	case UserRegistered:
+		m.userExists = true
+	case EmailVerificationOTPValidated:
+		m.alreadyValidated = true
+	}
+	if resolved.Position.After(m.position) {
+		m.position = resolved.Position
+	}
+}

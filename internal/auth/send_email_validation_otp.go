@@ -26,6 +26,8 @@ type emailValidationOTPContext struct {
 	email       string
 	alreadySent bool
 	position    eventstore.Position
+	events      []eventstore.ResolvedEvent
+	query       eventstore.Query
 }
 
 func SendEmailValidationOTPCommandHandler(ctx context.Context, command SendEmailValidationOTPCommand, saver eventstore.Saver, retriever eventstore.Retriever, sender EmailSender) error {
@@ -47,8 +49,14 @@ func SendEmailValidationOTPCommandHandler(ctx context.Context, command SendEmail
 		return err
 	}
 
-	model := emailValidationOTPContext{position: eventstore.NoEventPosition}
-	for _, resolved := range append(append(generatedEvents, userEvents...), sentEvents...) {
+	events := append(append([]eventstore.ResolvedEvent{}, generatedEvents...), userEvents...)
+	events = append(events, sentEvents...)
+	model := emailValidationOTPContext{
+		position: eventstore.NoEventPosition,
+		events:   events,
+		query:    combineQueries(generatedQuery, userQuery, sentQuery),
+	}
+	for _, resolved := range model.events {
 		model.handle(resolved)
 	}
 	if model.alreadySent {
@@ -70,8 +78,8 @@ func SendEmailValidationOTPCommandHandler(ctx context.Context, command SendEmail
 	}
 
 	id := uuidv7.NewString()
-	sent := NewEmailVerificationOTPSentEvent(id, time.Now(), command.EmailVerificationOTPGeneratedID, metadataWithQuery(command.Metadata, combineQueries(generatedQuery, userQuery, sentQuery)))
-	_, err = saver.SaveEvents(ctx, []eventstore.DomainEvent{sent}, model.position, append(generatedEvents, userEvents...), combineQueries(generatedQuery, userQuery, sentQuery))
+	sent := NewEmailVerificationOTPSentEvent(id, time.Now(), command.EmailVerificationOTPGeneratedID, metadataWithQuery(command.Metadata, model.query))
+	_, err = saver.SaveEvents(ctx, []eventstore.DomainEvent{sent}, model.position, model.events, model.query)
 	return err
 }
 

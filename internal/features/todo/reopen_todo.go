@@ -32,11 +32,10 @@ func ReopenTodoCommandHandler(ctx context.Context, command ReopenTodoCommand, sa
 		return ReopenTodoResult{Skipped: true}, nil
 	}
 
-	query := streamQuery(command.TodoID, command.UserRegisteredID)
 	eventID := uuidv7.NewString()
-	event := NewTodoReopenedEvent(eventID, command.TodoID, command.UserRegisteredID, time.Now(), metadataWithQuery(command.Metadata, query))
+	event := NewTodoReopenedEvent(eventID, command.TodoID, command.UserRegisteredID, time.Now(), metadataWithQuery(command.Metadata, model.query))
 
-	if _, err := saver.SaveEvents(ctx, []eventstore.DomainEvent{event}, model.position, model.events, query); err != nil {
+	if _, err := saver.SaveEvents(ctx, []eventstore.DomainEvent{event}, model.position, model.events, model.query); err != nil {
 		return ReopenTodoResult{}, err
 	}
 	return ReopenTodoResult{TodoReopenedID: eventID}, nil
@@ -48,6 +47,7 @@ type reopenTodoContext struct {
 	completed bool
 	position  eventstore.Position
 	events    []eventstore.ResolvedEvent
+	query     eventstore.Query
 }
 
 func loadReopenTodoContext(ctx context.Context, retriever eventstore.Retriever, todoID, userRegisteredID string) (*reopenTodoContext, error) {
@@ -57,7 +57,7 @@ func loadReopenTodoContext(ctx context.Context, retriever eventstore.Retriever, 
 		return nil, err
 	}
 
-	model := &reopenTodoContext{position: eventstore.NoEventPosition, events: events}
+	model := &reopenTodoContext{position: eventstore.NoEventPosition, events: events, query: query}
 	for _, event := range events {
 		model.handle(event)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
+	"github.com/oexza/go-orisun-datastar/internal/views"
 )
 
 type ReopenAllCompletedTodosCommand struct {
@@ -12,11 +13,11 @@ type ReopenAllCompletedTodosCommand struct {
 }
 
 func ReopenAllCompletedTodosCommandHandler(ctx context.Context, command ReopenAllCompletedTodosCommand, readModel TodoReadModelReader, saver eventstore.Saver, retriever eventstore.Retriever) error {
-	todos, err := readModel.List(ctx, command.UserRegisteredID)
+	model, err := loadReopenAllCompletedTodosContext(ctx, readModel, command.UserRegisteredID)
 	if err != nil {
 		return err
 	}
-	for _, item := range todos {
+	for _, item := range model.todos {
 		if !item.Completed {
 			continue
 		}
@@ -29,4 +30,16 @@ func ReopenAllCompletedTodosCommandHandler(ctx context.Context, command ReopenAl
 		}
 	}
 	return nil
+}
+
+type reopenAllCompletedTodosContext struct {
+	todos []views.Todo
+}
+
+func loadReopenAllCompletedTodosContext(ctx context.Context, readModel TodoReadModelReader, userRegisteredID string) (*reopenAllCompletedTodosContext, error) {
+	todos, err := readModel.List(ctx, userRegisteredID)
+	if err != nil {
+		return nil, err
+	}
+	return &reopenAllCompletedTodosContext{todos: todos}, nil
 }

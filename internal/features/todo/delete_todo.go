@@ -28,11 +28,10 @@ func DeleteTodoCommandHandler(ctx context.Context, command DeleteTodoCommand, sa
 		return DeleteTodoResult{}, err
 	}
 
-	query := streamQuery(command.TodoID, command.UserRegisteredID)
 	eventID := uuidv7.NewString()
-	event := NewTodoDeletedEvent(eventID, command.TodoID, command.UserRegisteredID, time.Now(), metadataWithQuery(command.Metadata, query))
+	event := NewTodoDeletedEvent(eventID, command.TodoID, command.UserRegisteredID, time.Now(), metadataWithQuery(command.Metadata, model.query))
 
-	if _, err := saver.SaveEvents(ctx, []eventstore.DomainEvent{event}, model.position, model.events, query); err != nil {
+	if _, err := saver.SaveEvents(ctx, []eventstore.DomainEvent{event}, model.position, model.events, model.query); err != nil {
 		return DeleteTodoResult{}, err
 	}
 	return DeleteTodoResult{TodoDeletedID: eventID}, nil
@@ -43,6 +42,7 @@ type deleteTodoContext struct {
 	deleted  bool
 	position eventstore.Position
 	events   []eventstore.ResolvedEvent
+	query    eventstore.Query
 }
 
 func loadDeleteTodoContext(ctx context.Context, retriever eventstore.Retriever, todoID, userRegisteredID string) (*deleteTodoContext, error) {
@@ -52,7 +52,7 @@ func loadDeleteTodoContext(ctx context.Context, retriever eventstore.Retriever, 
 		return nil, err
 	}
 
-	model := &deleteTodoContext{position: eventstore.NoEventPosition, events: events}
+	model := &deleteTodoContext{position: eventstore.NoEventPosition, events: events, query: query}
 	for _, event := range events {
 		model.handle(event)
 	}

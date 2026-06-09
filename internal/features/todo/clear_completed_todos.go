@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
+	"github.com/oexza/go-orisun-datastar/internal/views"
 )
 
 type ClearCompletedTodosCommand struct {
@@ -12,11 +13,11 @@ type ClearCompletedTodosCommand struct {
 }
 
 func ClearCompletedTodosCommandHandler(ctx context.Context, command ClearCompletedTodosCommand, readModel TodoReadModelReader, saver eventstore.Saver, retriever eventstore.Retriever) error {
-	todos, err := readModel.List(ctx, command.UserRegisteredID)
+	model, err := loadClearCompletedTodosContext(ctx, readModel, command.UserRegisteredID)
 	if err != nil {
 		return err
 	}
-	for _, item := range todos {
+	for _, item := range model.todos {
 		if !item.Completed {
 			continue
 		}
@@ -29,4 +30,16 @@ func ClearCompletedTodosCommandHandler(ctx context.Context, command ClearComplet
 		}
 	}
 	return nil
+}
+
+type clearCompletedTodosContext struct {
+	todos []views.Todo
+}
+
+func loadClearCompletedTodosContext(ctx context.Context, readModel TodoReadModelReader, userRegisteredID string) (*clearCompletedTodosContext, error) {
+	todos, err := readModel.List(ctx, userRegisteredID)
+	if err != nil {
+		return nil, err
+	}
+	return &clearCompletedTodosContext{todos: todos}, nil
 }

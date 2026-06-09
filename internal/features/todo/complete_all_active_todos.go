@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
+	"github.com/oexza/go-orisun-datastar/internal/views"
 )
 
 type CompleteAllActiveTodosCommand struct {
@@ -12,11 +13,11 @@ type CompleteAllActiveTodosCommand struct {
 }
 
 func CompleteAllActiveTodosCommandHandler(ctx context.Context, command CompleteAllActiveTodosCommand, readModel TodoReadModelReader, saver eventstore.Saver, retriever eventstore.Retriever) error {
-	todos, err := readModel.List(ctx, command.UserRegisteredID)
+	model, err := loadCompleteAllActiveTodosContext(ctx, readModel, command.UserRegisteredID)
 	if err != nil {
 		return err
 	}
-	for _, item := range todos {
+	for _, item := range model.todos {
 		if item.Completed {
 			continue
 		}
@@ -29,4 +30,16 @@ func CompleteAllActiveTodosCommandHandler(ctx context.Context, command CompleteA
 		}
 	}
 	return nil
+}
+
+type completeAllActiveTodosContext struct {
+	todos []views.Todo
+}
+
+func loadCompleteAllActiveTodosContext(ctx context.Context, readModel TodoReadModelReader, userRegisteredID string) (*completeAllActiveTodosContext, error) {
+	todos, err := readModel.List(ctx, userRegisteredID)
+	if err != nil {
+		return nil, err
+	}
+	return &completeAllActiveTodosContext{todos: todos}, nil
 }
