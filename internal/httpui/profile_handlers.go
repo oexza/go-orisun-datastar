@@ -81,7 +81,7 @@ func (s Server) uploadImage(w http.ResponseWriter, r *http.Request, header bool)
 func (s Server) updateName(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	user := currentUser(r)
-	err := s.Auth.UpdateNameWithMetadata(r.Context(), user, r.FormValue("name"), eventstore.HTTPCommandMetadata(r, user.UserRegisteredID))
+	err := s.Accounts.UpdateNameWithMetadata(r.Context(), user, r.FormValue("name"), eventstore.HTTPCommandMetadata(r, user.UserRegisteredID))
 	writeSSE(w, r, func(sse *datastar.ServerSentEventGenerator) error {
 		if err != nil {
 			return alert(sse, err.Error())
@@ -93,7 +93,7 @@ func (s Server) updateName(w http.ResponseWriter, r *http.Request) {
 func (s Server) changePassword(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	user := currentUser(r)
-	err := s.Auth.ChangePasswordWithMetadata(r.Context(), user, r.FormValue("currentPassword"), r.FormValue("newPassword"), eventstore.HTTPCommandMetadata(r, user.UserRegisteredID))
+	err := s.Accounts.ChangePasswordWithMetadata(r.Context(), user, r.FormValue("currentPassword"), r.FormValue("newPassword"), eventstore.HTTPCommandMetadata(r, user.UserRegisteredID))
 	writeSSE(w, r, func(sse *datastar.ServerSentEventGenerator) error {
 		if err != nil {
 			return alert(sse, err.Error())

@@ -6,9 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"math/big"
-	"net/http"
 	"strings"
-	"time"
 
 	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
 	"golang.org/x/crypto/bcrypt"
@@ -20,22 +18,15 @@ import (
 	"zombiezen.com/go/sqlite"
 )
 
-type Service struct {
-	db            *appdb.DB
-	store         eventstore.Saver
-	retriever     eventstore.Retriever
-	secureCookie  bool
-	sessionCookie string
+type AccountCommands struct {
+	db        *appdb.DB
+	users     *AuthUserStore
+	store     eventstore.Saver
+	retriever eventstore.Retriever
 }
 
-func NewService(db *appdb.DB, saver eventstore.Saver, retriever eventstore.Retriever, secureCookie bool) *Service {
-	return &Service{
-		db:            db,
-		store:         saver,
-		retriever:     retriever,
-		secureCookie:  secureCookie,
-		sessionCookie: "go-event-starter-session",
-	}
+func NewAccountCommands(db *appdb.DB, users *AuthUserStore, saver eventstore.Saver, retriever eventstore.Retriever) *AccountCommands {
+	return &AccountCommands{db: db, users: users, store: saver, retriever: retriever}
 }
 
 type RegisterInput struct {
@@ -48,11 +39,11 @@ type RegisterInput struct {
 	Metadata    CommandMetadata
 }
 
-func (s *Service) Register(ctx context.Context, input RegisterInput) (views.User, error) {
+func (s *AccountCommands) Register(ctx context.Context, input RegisterInput) (views.User, error) {
 	return s.RegisterWithMetadata(ctx, input, input.Metadata)
 }
 
-func (s *Service) RegisterWithMetadata(ctx context.Context, input RegisterInput, metadata CommandMetadata) (views.User, error) {
+func (s *AccountCommands) RegisterWithMetadata(ctx context.Context, input RegisterInput, metadata CommandMetadata) (views.User, error) {
 	if len(input.Password) < 6 {
 		return views.User{}, errors.New("invalid registration input")
 	}
@@ -100,95 +91,15 @@ func (s *Service) RegisterWithMetadata(ctx context.Context, input RegisterInput,
 	return user, nil
 }
 
-func (s *Service) Login(ctx context.Context, emailAddress, password string) (views.User, string, error) {
-	user, hash, err := s.userByEmailWithPassword(ctx, strings.ToLower(strings.TrimSpace(emailAddress)))
-	if err != nil {
-		return views.User{}, "", errors.New("invalid email or password")
-	}
-	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)); err != nil {
-		return views.User{}, "", errors.New("invalid email or password")
-	}
-	token, err := randomToken(32)
-	if err != nil {
-		return views.User{}, "", err
-	}
-	err = s.db.WriteTX(ctx, func(conn *sqlite.Conn) error {
-		return dbsql.OnceCreateAuthSession(conn, dbsql.CreateAuthSessionParams{
-			Id:        uuidv7.NewString(),
-			Token:     token,
-			UserId:    user.ID,
-			ExpiresAt: appdb.SQLTime(time.Now().Add(90 * 24 * time.Hour)),
-		})
-	})
-	return user, token, err
-}
-
-func (s *Service) Logout(ctx context.Context, token string) error {
-	return s.db.WriteTX(ctx, func(conn *sqlite.Conn) error {
-		return dbsql.OnceDeleteAuthSessionByToken(conn, token)
-	})
-}
-
-func (s *Service) CurrentUser(ctx context.Context, r *http.Request) (views.User, bool, error) {
-	cookie, err := r.Cookie(s.sessionCookie)
-	if err != nil || cookie.Value == "" {
-		return views.User{}, false, nil
-	}
-	user, err := s.UserBySessionToken(ctx, cookie.Value)
-	if err != nil {
-		if errors.Is(err, appdb.ErrNoRows) {
-			return views.User{}, false, nil
-		}
-		return views.User{}, false, err
-	}
-	return user, true, nil
-}
-
-func (s *Service) UserBySessionToken(ctx context.Context, token string) (views.User, error) {
-	var row *dbsql.UserBySessionTokenRes
-	if err := s.db.ReadTX(ctx, func(conn *sqlite.Conn) error {
-		var err error
-		row, err = dbsql.OnceUserBySessionToken(conn, token)
-		return err
-	}); err != nil {
-		return views.User{}, err
-	}
-	return userFromSessionRow(row)
-}
-
-func (s *Service) UserByRegisteredID(ctx context.Context, userRegisteredID string) (views.User, error) {
-	var row *dbsql.UserByRegisteredIdRes
-	if err := s.db.ReadTX(ctx, func(conn *sqlite.Conn) error {
-		var err error
-		row, err = dbsql.OnceUserByRegisteredId(conn, userRegisteredID)
-		return err
-	}); err != nil {
-		return views.User{}, err
-	}
-	return userFromRegisteredRow(row)
-}
-
-func (s *Service) UserByIDOrRegisteredID(ctx context.Context, id string) (views.User, error) {
-	var row *dbsql.UserByIdorRegisteredIdRes
-	if err := s.db.ReadTX(ctx, func(conn *sqlite.Conn) error {
-		var err error
-		row, err = dbsql.OnceUserByIdorRegisteredId(conn, id)
-		return err
-	}); err != nil {
-		return views.User{}, err
-	}
-	return userFromIDOrRegisteredRow(row)
-}
-
-func (s *Service) GenerateEmailVerificationOTP(ctx context.Context, user views.User) error {
+func (s *AccountCommands) GenerateEmailVerificationOTP(ctx context.Context, user views.User) error {
 	return s.generateEmailVerificationOTP(ctx, user, nil)
 }
 
-func (s *Service) GenerateEmailVerificationOTPWithMetadata(ctx context.Context, user views.User, metadata CommandMetadata) error {
+func (s *AccountCommands) GenerateEmailVerificationOTPWithMetadata(ctx context.Context, user views.User, metadata CommandMetadata) error {
 	return s.generateEmailVerificationOTP(ctx, user, metadata)
 }
 
-func (s *Service) generateEmailVerificationOTP(ctx context.Context, user views.User, metadata CommandMetadata) error {
+func (s *AccountCommands) generateEmailVerificationOTP(ctx context.Context, user views.User, metadata CommandMetadata) error {
 	result, err := GenerateEmailVerificationOTPCommandHandler(ctx, GenerateEmailVerificationOTPCommand{
 		User:     user,
 		Metadata: metadata,
@@ -212,27 +123,12 @@ func (s *Service) generateEmailVerificationOTP(ctx context.Context, user views.U
 	return nil
 }
 
-func (s *Service) UpdateImage(ctx context.Context, userRegisteredID, imageURL string) error {
-	return s.db.WriteTX(ctx, func(conn *sqlite.Conn) error {
-		return dbsql.OnceUpdateAuthUserImage(conn, dbsql.UpdateAuthUserImageParams{
-			Image:            stringPtr(imageURL),
-			UserRegisteredId: userRegisteredID,
-		})
-	})
-}
-
-func (s *Service) MarkEmailVerified(ctx context.Context, userRegisteredID string) error {
-	return s.db.WriteTX(ctx, func(conn *sqlite.Conn) error {
-		return dbsql.OnceMarkAuthUserEmailVerified(conn, userRegisteredID)
-	})
-}
-
-func (s *Service) ValidateOTP(ctx context.Context, userID, code string) error {
+func (s *AccountCommands) ValidateOTP(ctx context.Context, userID, code string) error {
 	return s.ValidateOTPWithMetadata(ctx, userID, code, nil)
 }
 
-func (s *Service) ValidateOTPWithMetadata(ctx context.Context, userID, code string, metadata CommandMetadata) error {
-	user, err := s.UserByIDOrRegisteredID(ctx, userID)
+func (s *AccountCommands) ValidateOTPWithMetadata(ctx context.Context, userID, code string, metadata CommandMetadata) error {
+	user, err := s.users.UserByIDOrRegisteredID(ctx, userID)
 	if err != nil {
 		return err
 	}
@@ -243,12 +139,12 @@ func (s *Service) ValidateOTPWithMetadata(ctx context.Context, userID, code stri
 	}, s.store, s.retriever)
 }
 
-func (s *Service) RequestPasswordReset(ctx context.Context, emailAddress string) error {
+func (s *AccountCommands) RequestPasswordReset(ctx context.Context, emailAddress string) error {
 	return s.RequestPasswordResetWithMetadata(ctx, emailAddress, nil)
 }
 
-func (s *Service) RequestPasswordResetWithMetadata(ctx context.Context, emailAddress string, metadata CommandMetadata) error {
-	user, _, err := s.userByEmailWithPassword(ctx, strings.ToLower(strings.TrimSpace(emailAddress)))
+func (s *AccountCommands) RequestPasswordResetWithMetadata(ctx context.Context, emailAddress string, metadata CommandMetadata) error {
+	user, _, err := s.users.userByEmailWithPassword(ctx, strings.ToLower(strings.TrimSpace(emailAddress)))
 	if err != nil {
 		return nil
 	}
@@ -272,11 +168,11 @@ func (s *Service) RequestPasswordResetWithMetadata(ctx context.Context, emailAdd
 	return nil
 }
 
-func (s *Service) ResetPassword(ctx context.Context, token, password string) error {
+func (s *AccountCommands) ResetPassword(ctx context.Context, token, password string) error {
 	return s.ResetPasswordWithMetadata(ctx, token, password, nil)
 }
 
-func (s *Service) ResetPasswordWithMetadata(ctx context.Context, token, password string, metadata CommandMetadata) error {
+func (s *AccountCommands) ResetPasswordWithMetadata(ctx context.Context, token, password string, metadata CommandMetadata) error {
 	if len(password) < 6 {
 		return errors.New("password must be at least 6 characters")
 	}
@@ -289,7 +185,7 @@ func (s *Service) ResetPasswordWithMetadata(ctx context.Context, token, password
 		return errors.New("invalid or expired reset token")
 	}
 	userID := strings.TrimPrefix(verification.Identifier, "password-reset:")
-	user, err := s.UserByIDOrRegisteredID(ctx, userID)
+	user, err := s.users.UserByIDOrRegisteredID(ctx, userID)
 	if err != nil {
 		return err
 	}
@@ -303,12 +199,12 @@ func (s *Service) ResetPasswordWithMetadata(ctx context.Context, token, password
 	}, s.store, s.retriever)
 }
 
-func (s *Service) ChangePassword(ctx context.Context, user views.User, currentPassword, newPassword string) error {
+func (s *AccountCommands) ChangePassword(ctx context.Context, user views.User, currentPassword, newPassword string) error {
 	return s.ChangePasswordWithMetadata(ctx, user, currentPassword, newPassword, nil)
 }
 
-func (s *Service) ChangePasswordWithMetadata(ctx context.Context, user views.User, currentPassword, newPassword string, metadata CommandMetadata) error {
-	_, hash, err := s.userByEmailWithPassword(ctx, user.Email)
+func (s *AccountCommands) ChangePasswordWithMetadata(ctx context.Context, user views.User, currentPassword, newPassword string, metadata CommandMetadata) error {
+	_, hash, err := s.users.userByEmailWithPassword(ctx, user.Email)
 	if err != nil {
 		return err
 	}
@@ -324,11 +220,11 @@ func (s *Service) ChangePasswordWithMetadata(ctx context.Context, user views.Use
 	}, s.store, s.retriever)
 }
 
-func (s *Service) UpdateName(ctx context.Context, user views.User, name string) error {
+func (s *AccountCommands) UpdateName(ctx context.Context, user views.User, name string) error {
 	return s.UpdateNameWithMetadata(ctx, user, name, nil)
 }
 
-func (s *Service) UpdateNameWithMetadata(ctx context.Context, user views.User, name string, metadata CommandMetadata) error {
+func (s *AccountCommands) UpdateNameWithMetadata(ctx context.Context, user views.User, name string, metadata CommandMetadata) error {
 	result, err := UpdateUserNameCommandHandler(ctx, UpdateUserNameCommand{
 		User:     user,
 		Name:     name,
@@ -345,19 +241,7 @@ func (s *Service) UpdateNameWithMetadata(ctx context.Context, user views.User, n
 	})
 }
 
-func (s *Service) SetSessionCookie(w http.ResponseWriter, token string) {
-	http.SetCookie(w, &http.Cookie{Name: s.sessionCookie, Value: token, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: s.secureCookie, Expires: time.Now().Add(90 * 24 * time.Hour)})
-}
-
-func (s *Service) ClearSessionCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{Name: s.sessionCookie, Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: s.secureCookie, MaxAge: -1})
-}
-
-func (s *Service) SessionCookieName() string {
-	return s.sessionCookie
-}
-
-func (s *Service) setPassword(ctx context.Context, userID, password string) error {
+func (s *AccountCommands) setPassword(ctx context.Context, userID, password string) error {
 	if len(password) < 6 {
 		return errors.New("password must be at least 6 characters")
 	}
@@ -371,31 +255,6 @@ func (s *Service) setPassword(ctx context.Context, userID, password string) erro
 			UserId:   userID,
 		})
 	})
-}
-
-func (s *Service) userByEmailWithPassword(ctx context.Context, emailAddress string) (views.User, string, error) {
-	var row *dbsql.UserByEmailWithPasswordRes
-	if err := s.db.ReadTX(ctx, func(conn *sqlite.Conn) error {
-		var err error
-		row, err = dbsql.OnceUserByEmailWithPassword(conn, emailAddress)
-		return err
-	}); err != nil {
-		return views.User{}, "", err
-	}
-	if row == nil || row.Password == nil {
-		return views.User{}, "", appdb.ErrNoRows
-	}
-	return views.User{
-		ID:               row.Id,
-		UserRegisteredID: row.UserRegisteredId,
-		Name:             row.Name,
-		Username:         row.Username,
-		Email:            row.Email,
-		EmailVerified:    row.EmailVerified != 0,
-		Image:            row.Image,
-		Bio:              row.Bio,
-		HeaderImageURL:   row.HeaderImageUrl,
-	}, *row.Password, nil
 }
 
 func userFromSessionRow(row *dbsql.UserBySessionTokenRes) (views.User, error) {
