@@ -46,16 +46,12 @@ func loadResetPasswordContext(ctx context.Context, command ResetPasswordCommand,
 	requestedQuery := passwordResetRequestedQuery(command.PasswordResetRequestedID)
 	completedQuery := passwordResetCompletedQuery(command.PasswordResetRequestedID)
 	query := combineQueries(requestedQuery, completedQuery)
-	requestedEvents, err := retriever.GetEvents(ctx, eventstore.NoEventPosition, 1, eventstore.Forward, requestedQuery)
+	latest, err := retriever.GetLatestByCriteria(ctx, query.Criteria)
 	if err != nil {
 		return nil, err
 	}
-	completedEvents, err := retriever.GetEvents(ctx, eventstore.NoEventPosition, 1, eventstore.Forward, completedQuery)
-	if err != nil {
-		return nil, err
-	}
-	events := append(append([]eventstore.ResolvedEvent{}, requestedEvents...), completedEvents...)
-	model := &resetPasswordContext{position: eventstore.NoEventPosition, events: events, query: query}
+	events := eventstore.EventsFromLatest(latest.Results)
+	model := &resetPasswordContext{position: latest.ContextPosition, events: events, query: query}
 	for _, event := range events {
 		model.handle(event)
 	}

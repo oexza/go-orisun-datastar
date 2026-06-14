@@ -41,16 +41,12 @@ func loadChangePasswordContext(ctx context.Context, command ChangePasswordComman
 	userQuery := userRegisteredQuery(command.User.UserRegisteredID)
 	passwordQuery := passwordChangedByUserQuery(command.User.UserRegisteredID)
 	query := combineQueries(userQuery, passwordQuery)
-	userEvents, err := retriever.GetEvents(ctx, eventstore.NoEventPosition, 1, eventstore.Forward, userQuery)
+	latest, err := retriever.GetLatestByCriteria(ctx, query.Criteria)
 	if err != nil {
 		return nil, err
 	}
-	passwordEvents, err := retriever.GetEvents(ctx, eventstore.LastEventPosition, 1, eventstore.Backward, passwordQuery)
-	if err != nil {
-		return nil, err
-	}
-	events := append(append([]eventstore.ResolvedEvent{}, userEvents...), passwordEvents...)
-	model := &changePasswordContext{position: eventstore.NoEventPosition, events: events, query: query}
+	events := eventstore.EventsFromLatest(latest.Results)
+	model := &changePasswordContext{position: latest.ContextPosition, events: events, query: query}
 	for _, event := range events {
 		model.handle(event)
 	}

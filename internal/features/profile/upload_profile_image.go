@@ -78,15 +78,12 @@ func loadUploadProfileImageContext(ctx context.Context, command UploadProfileIma
 		position: eventstore.NoEventPosition,
 		query:    query,
 	}
-	userEvents, err := retriever.GetEvents(ctx, eventstore.LastEventPosition, 1, eventstore.Backward, userQuery)
+	latest, err := retriever.GetLatestByCriteria(ctx, query.Criteria)
 	if err != nil {
 		return nil, err
 	}
-	imageEvents, err := retriever.GetEvents(ctx, eventstore.LastEventPosition, 1, eventstore.Backward, imageQuery)
-	if err != nil {
-		return nil, err
-	}
-	model.events = append(append([]eventstore.ResolvedEvent{}, userEvents...), imageEvents...)
+	model.events = eventstore.EventsFromLatest(latest.Results)
+	model.position = latest.ContextPosition
 	for _, event := range model.events {
 		model.handle(event)
 	}

@@ -32,29 +32,19 @@ type emailValidationOTPContext struct {
 
 func SendEmailValidationOTPCommandHandler(ctx context.Context, command SendEmailValidationOTPCommand, saver eventstore.Saver, retriever eventstore.Retriever, sender EmailSender) error {
 	generatedQuery := emailVerificationOTPGeneratedQuery(command.EmailVerificationOTPGeneratedID)
-	generatedEvents, err := retriever.GetEvents(ctx, eventstore.NoEventPosition, 1, eventstore.Forward, generatedQuery)
-	if err != nil {
-		return err
-	}
-
 	userQuery := userRegisteredQuery(command.UserRegisteredID)
-	userEvents, err := retriever.GetEvents(ctx, eventstore.NoEventPosition, 1, eventstore.Forward, userQuery)
-	if err != nil {
-		return err
-	}
-
 	sentQuery := emailVerificationOTPSentQuery(command.EmailVerificationOTPGeneratedID)
-	sentEvents, err := retriever.GetEvents(ctx, eventstore.NoEventPosition, 1, eventstore.Forward, sentQuery)
+	query := combineQueries(generatedQuery, userQuery, sentQuery)
+	latest, err := retriever.GetLatestByCriteria(ctx, query.Criteria)
 	if err != nil {
 		return err
 	}
 
-	events := append(append([]eventstore.ResolvedEvent{}, generatedEvents...), userEvents...)
-	events = append(events, sentEvents...)
+	events := eventstore.EventsFromLatest(latest.Results)
 	model := emailValidationOTPContext{
-		position: eventstore.NoEventPosition,
+		position: latest.ContextPosition,
 		events:   events,
-		query:    combineQueries(generatedQuery, userQuery, sentQuery),
+		query:    query,
 	}
 	for _, resolved := range model.events {
 		model.handle(resolved)

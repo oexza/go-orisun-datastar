@@ -52,12 +52,13 @@ type completeTodoContext struct {
 
 func loadCompleteTodoContext(ctx context.Context, retriever eventstore.Retriever, todoID, userRegisteredID string) (*completeTodoContext, error) {
 	query := streamQuery(todoID, userRegisteredID)
-	events, err := retriever.GetEvents(ctx, eventstore.NoEventPosition, 100, eventstore.Forward, query)
+	latest, err := retriever.GetLatestByCriteria(ctx, query.Criteria)
 	if err != nil {
 		return nil, err
 	}
+	events := eventstore.EventsFromLatest(latest.Results)
 
-	model := &completeTodoContext{position: eventstore.NoEventPosition, events: events, query: query}
+	model := &completeTodoContext{position: latest.ContextPosition, events: events, query: query}
 	for _, event := range events {
 		model.handle(event)
 	}

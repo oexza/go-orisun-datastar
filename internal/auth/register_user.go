@@ -69,10 +69,11 @@ func loadRegisterUserContext(ctx context.Context, command RegisterUserCommand, r
 	}
 
 	query := userRegisteredByUsernameOrEmailQuery(username, email)
-	events, err := retriever.GetEvents(ctx, eventstore.NoEventPosition, 2, eventstore.Forward, query)
+	latest, err := retriever.GetLatestByCriteria(ctx, query.Criteria)
 	if err != nil {
 		return nil, err
 	}
+	events := eventstore.EventsFromLatest(latest.Results)
 
 	model := &registerUserContext{
 		userRegisteredID: uuidv7.NewString(),
@@ -80,7 +81,7 @@ func loadRegisterUserContext(ctx context.Context, command RegisterUserCommand, r
 		email:            email,
 		firstName:        strings.TrimSpace(command.FirstName),
 		lastName:         strings.TrimSpace(command.LastName),
-		position:         eventstore.NoEventPosition,
+		position:         latest.ContextPosition,
 		events:           events,
 		query:            query,
 	}

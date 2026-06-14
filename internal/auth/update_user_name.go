@@ -59,16 +59,12 @@ func loadUpdateUserNameContext(ctx context.Context, command UpdateUserNameComman
 	userQuery := userRegisteredQuery(command.User.UserRegisteredID)
 	nameQuery := userNameChangedByUserQuery(command.User.UserRegisteredID)
 	query := combineQueries(userQuery, nameQuery)
-	userEvents, err := retriever.GetEvents(ctx, eventstore.NoEventPosition, 1, eventstore.Forward, userQuery)
+	latest, err := retriever.GetLatestByCriteria(ctx, query.Criteria)
 	if err != nil {
 		return nil, err
 	}
-	nameEvents, err := retriever.GetEvents(ctx, eventstore.LastEventPosition, 1, eventstore.Backward, nameQuery)
-	if err != nil {
-		return nil, err
-	}
-	events := append(append([]eventstore.ResolvedEvent{}, userEvents...), nameEvents...)
-	model := &updateUserNameContext{nextName: name, position: eventstore.NoEventPosition, events: events, query: query}
+	events := eventstore.EventsFromLatest(latest.Results)
+	model := &updateUserNameContext{nextName: name, position: latest.ContextPosition, events: events, query: query}
 	for _, event := range events {
 		model.handle(event)
 	}

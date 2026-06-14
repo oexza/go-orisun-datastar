@@ -56,6 +56,16 @@ type ResolvedEvent struct {
 	Event    DomainEvent `json:"event"`
 }
 
+type LatestCriterionResult struct {
+	Criterion Criterion      `json:"criterion"`
+	Event     *ResolvedEvent `json:"event,omitempty"`
+}
+
+type LatestByCriteriaResult struct {
+	Results         []LatestCriterionResult `json:"results"`
+	ContextPosition Position                `json:"contextPosition"`
+}
+
 type WriteResult struct {
 	Position Position `json:"position"`
 }
@@ -66,6 +76,7 @@ type Saver interface {
 
 type Retriever interface {
 	GetEvents(ctx context.Context, from Position, count int, direction Direction, query Query) ([]ResolvedEvent, error)
+	GetLatestByCriteria(ctx context.Context, criteria []Criterion) (LatestByCriteriaResult, error)
 }
 
 type Subscriber interface {
@@ -128,6 +139,24 @@ func MustData(v any) map[string]any {
 		panic(err)
 	}
 	return out
+}
+
+func EventsFromLatest(results []LatestCriterionResult) []ResolvedEvent {
+	events := make([]ResolvedEvent, 0, len(results))
+	for _, result := range results {
+		if result.Event != nil {
+			events = append(events, *result.Event)
+		}
+	}
+	sort.SliceStable(events, func(i, j int) bool {
+		left := events[i].Position
+		right := events[j].Position
+		if left.Commit != right.Commit {
+			return left.Commit < right.Commit
+		}
+		return left.Prepare < right.Prepare
+	})
+	return events
 }
 
 func MergeScope(events []ResolvedEvent, target DomainEvent) (DomainEvent, error) {

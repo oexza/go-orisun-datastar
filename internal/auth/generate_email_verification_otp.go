@@ -61,17 +61,13 @@ func loadGenerateEmailVerificationOTPContext(ctx context.Context, command Genera
 	stateQuery := emailVerificationOTPStateQuery(command.User.UserRegisteredID)
 	query := combineQueries(userQuery, stateQuery)
 
-	userEvents, err := retriever.GetEvents(ctx, eventstore.NoEventPosition, 1, eventstore.Forward, userQuery)
-	if err != nil {
-		return nil, err
-	}
-	stateEvents, err := retriever.GetEvents(ctx, eventstore.LastEventPosition, 1, eventstore.Backward, stateQuery)
+	latest, err := retriever.GetLatestByCriteria(ctx, query.Criteria)
 	if err != nil {
 		return nil, err
 	}
 
-	events := append(append([]eventstore.ResolvedEvent{}, userEvents...), stateEvents...)
-	model := &generateEmailVerificationOTPContext{position: eventstore.NoEventPosition, events: events, query: query}
+	events := eventstore.EventsFromLatest(latest.Results)
+	model := &generateEmailVerificationOTPContext{position: latest.ContextPosition, events: events, query: query}
 	for _, event := range events {
 		model.handle(event)
 	}

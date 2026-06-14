@@ -47,11 +47,12 @@ type requestPasswordResetContext struct {
 
 func loadRequestPasswordResetContext(ctx context.Context, command RequestPasswordResetCommand, retriever eventstore.Retriever) (*requestPasswordResetContext, error) {
 	query := userRegisteredQuery(command.User.UserRegisteredID)
-	events, err := retriever.GetEvents(ctx, eventstore.NoEventPosition, 1, eventstore.Forward, query)
+	latest, err := retriever.GetLatestByCriteria(ctx, query.Criteria)
 	if err != nil {
 		return nil, err
 	}
-	model := &requestPasswordResetContext{position: eventstore.NoEventPosition, events: events, query: query}
+	events := eventstore.EventsFromLatest(latest.Results)
+	model := &requestPasswordResetContext{position: latest.ContextPosition, events: events, query: query}
 	for _, event := range events {
 		if event.Position.After(model.position) {
 			model.position = event.Position
