@@ -1,3 +1,14 @@
+-- name: ProfileUser :one
+SELECT user_id,
+       coalesce(name, '') AS name,
+       coalesce(username, '') AS username,
+       coalesce(email, '') AS email,
+       coalesce(image, '') AS image,
+       coalesce(bio, '') AS bio,
+       coalesce(header_image_url, '') AS header_image_url
+FROM profile_stats
+WHERE user_id = @user_id;
+
 -- name: UpsertRegisteredProfileUser :exec
 INSERT INTO profile_stats (user_id, name, username, email, last_event_commit_position, last_event_prepare_position)
 VALUES (@user_id, @name, @username, @email, @last_event_commit_position, @last_event_prepare_position)

@@ -3,6 +3,7 @@ package todo
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -111,6 +112,35 @@ func (s *fakeTodoStore) GetEvents(_ context.Context, _ eventstore.Position, _ in
 	return append([]eventstore.ResolvedEvent(nil), s.eventsByTodoID[todoID]...), nil
 }
 
+func (s *fakeTodoStore) GetLatestByCriteria(_ context.Context, criteria []eventstore.Criterion) (eventstore.LatestByCriteriaResult, error) {
+	query := eventstore.Query{Criteria: criteria}
+	todoID, ok := todoIDFromQuery(query)
+	if !ok {
+		return eventstore.LatestByCriteriaResult{}, errors.New("missing todo scope query")
+	}
+	result := eventstore.LatestByCriteriaResult{
+		Results:         make([]eventstore.LatestCriterionResult, 0, len(criteria)),
+		ContextPosition: eventstore.NoEventPosition,
+	}
+	for _, criterion := range criteria {
+		latest := eventstore.LatestCriterionResult{Criterion: criterion}
+		for _, event := range s.eventsByTodoID[todoID] {
+			if !matchesCriterion(event, criterion) {
+				continue
+			}
+			candidate := event
+			if latest.Event == nil || candidate.Position.After(latest.Event.Position) {
+				latest.Event = &candidate
+			}
+		}
+		if latest.Event != nil && latest.Event.Position.After(result.ContextPosition) {
+			result.ContextPosition = latest.Event.Position
+		}
+		result.Results = append(result.Results, latest)
+	}
+	return result, nil
+}
+
 func (s *fakeTodoStore) appendResolved(fallbackUserRegisteredID string, event eventstore.DomainEvent) {
 	scope := eventstore.Scope(event.Data)
 	todoID, _ := scope["todoId"].(string)
@@ -127,6 +157,35 @@ func (s *fakeTodoStore) appendResolved(fallbackUserRegisteredID string, event ev
 		Event:    event,
 	}
 	s.eventsByTodoID[todoID] = append(s.eventsByTodoID[todoID], resolved)
+}
+
+func matchesCriterion(resolved eventstore.ResolvedEvent, criterion eventstore.Criterion) bool {
+	for _, tag := range criterion.Tags {
+		if tag.Key == "eventType" {
+			if resolved.Event.EventType != tag.Value {
+				return false
+			}
+			continue
+		}
+		value := stringDataValue(resolved.Event.Data, tag.Key)
+		if value != tag.Value {
+			return false
+		}
+	}
+	return true
+}
+
+func stringDataValue(data map[string]any, key string) string {
+	current := any(data)
+	for _, part := range strings.Split(key, ".") {
+		mapped, ok := current.(map[string]any)
+		if !ok {
+			return ""
+		}
+		current = mapped[part]
+	}
+	value, _ := current.(string)
+	return value
 }
 
 func (s *fakeTodoStore) countSaved(eventType string) int {

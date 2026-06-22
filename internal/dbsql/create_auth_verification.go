@@ -23,7 +23,7 @@ type CreateAuthVerificationStmt struct {
 
 func CreateAuthVerification(tx *sqlite.Conn) *CreateAuthVerificationStmt {
 	const querySQL = `
-INSERT INTO auth_verification (id, identifier, value, expires_at)
+INSERT OR IGNORE INTO auth_verification (id, identifier, value, expires_at)
 VALUES (?1, ?2, ?3, ?4)
     `
 

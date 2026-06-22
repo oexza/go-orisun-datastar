@@ -37,17 +37,17 @@ func (s Server) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	year, _ := strconv.Atoi(r.FormValue("yearOfBirth"))
-	user, err := s.Accounts.Register(r.Context(), auth.RegisterInput{
+	registered, err := auth.RegisterUserCommandHandler(r.Context(), auth.RegisterUserCommand{
 		Username: r.FormValue("username"), Email: r.FormValue("email"), Password: r.FormValue("password"),
 		FirstName: r.FormValue("firstName"), LastName: r.FormValue("lastName"), YearOfBirth: year,
 		Metadata: eventstore.HTTPCommandMetadata(r, ""),
-	})
+	}, s.EventSaver, s.EventRetriever)
 	if err != nil {
 		patchTempl(w, r, views.RegisterForm(map[string]string{"error": err.Error()}), datastar.WithSelectorID("auth-page"))
 		return
 	}
 	writeSSE(w, r, func(sse *datastar.ServerSentEventGenerator) error {
-		return sse.Redirect("/register/" + user.ID + "/validate-email")
+		return sse.Redirect("/register/" + registered.UserRegisteredID + "/validate-email")
 	})
 }
 
@@ -79,14 +79,21 @@ func (s Server) logout(w http.ResponseWriter, r *http.Request) {
 
 func (s Server) forgotPassword(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
-	_ = s.Accounts.RequestPasswordResetWithMetadata(r.Context(), r.FormValue("email"), eventstore.HTTPCommandMetadata(r, ""))
+	_, _ = auth.RequestPasswordResetCommandHandler(r.Context(), auth.RequestPasswordResetCommand{
+		EmailAddress: r.FormValue("email"),
+		Metadata:     eventstore.HTTPCommandMetadata(r, ""),
+	}, s.PasswordCredentials, s.EventSaver, s.EventRetriever)
 	writeSSE(w, r, func(sse *datastar.ServerSentEventGenerator) error { return sse.Redirect("/login") })
 }
 
 func (s Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	token := chi.URLParam(r, "token")
-	if err := s.Accounts.ResetPasswordWithMetadata(r.Context(), token, r.FormValue("password"), eventstore.HTTPCommandMetadata(r, "")); err != nil {
+	if err := auth.ResetPasswordCommandHandler(r.Context(), auth.ResetPasswordCommand{
+		Token:    token,
+		Password: r.FormValue("password"),
+		Metadata: eventstore.HTTPCommandMetadata(r, ""),
+	}, s.Verifications, s.AuthUsers, s.EventSaver, s.EventRetriever); err != nil {
 		patchTempl(w, r, views.ResetPasswordForm(token, map[string]string{"error": err.Error()}), datastar.WithSelectorID("auth-page"))
 		return
 	}
@@ -96,7 +103,7 @@ func (s Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 func (s Server) validateEmail(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	userID := chi.URLParam(r, "userID")
-	if err := s.Accounts.ValidateOTPWithMetadata(r.Context(), userID, r.FormValue("otp"), eventstore.HTTPCommandMetadata(r, "")); err != nil {
+	if err := auth.ValidateEmailVerificationOTPForUserCommandHandler(r.Context(), userID, r.FormValue("otp"), eventstore.HTTPCommandMetadata(r, ""), s.AuthUsers, s.EventSaver, s.EventRetriever); err != nil {
 		patchTempl(w, r, views.ValidateEmailForm(userID, map[string]string{"error": err.Error()}), datastar.WithSelectorID("auth-page"))
 		return
 	}
@@ -107,7 +114,10 @@ func (s Server) sendOTP(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "userID")
 	user, err := s.AuthUsers.UserByIDOrRegisteredID(r.Context(), userID)
 	if err == nil {
-		_ = s.Accounts.GenerateEmailVerificationOTPWithMetadata(r.Context(), user, eventstore.HTTPCommandMetadata(r, user.UserRegisteredID))
+		_, _ = auth.GenerateEmailVerificationOTPCommandHandler(r.Context(), auth.GenerateEmailVerificationOTPCommand{
+			User:     user,
+			Metadata: eventstore.HTTPCommandMetadata(r, user.UserRegisteredID),
+		}, s.EventSaver, s.EventRetriever)
 	}
 	writeSSE(w, r, func(sse *datastar.ServerSentEventGenerator) error {
 		return sse.Redirect("/register/" + userID + "/validate-email")

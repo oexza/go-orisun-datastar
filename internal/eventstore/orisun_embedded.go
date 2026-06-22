@@ -9,14 +9,19 @@ import (
 
 	natsgo "github.com/nats-io/nats.go"
 	orisunconfig "github.com/oexza/Orisun/config"
-	embeddedsqlite "github.com/oexza/Orisun/embedded/sqlite"
 	orisunlog "github.com/oexza/Orisun/logging"
+	natsruntime "github.com/oexza/Orisun/nats"
 	orisunapi "github.com/oexza/Orisun/orisun"
+	sqlitebackend "github.com/oexza/Orisun/sqlite"
 )
 
 type EmbeddedOrisun struct {
-	store    *embeddedsqlite.Store
-	boundary string
+	store        *orisunapi.OrisunServer
+	retriever    orisunapi.EventsRetriever
+	indexManager orisunapi.BoundaryIndexManager
+	cancel       context.CancelFunc
+	natsRuntime  *natsruntime.Runtime
+	boundary     string
 }
 
 type EmbeddedConfig struct {
@@ -57,24 +62,61 @@ func StartEmbeddedOrisun(ctx context.Context, cfg EmbeddedConfig) (*EmbeddedOris
 	appConfig.Logging.Level = cfg.LogLevel
 
 	logger := orisunlog.InitializeDefaultLogger(appConfig.Logging)
-	store, err := embeddedsqlite.Start(ctx, appConfig, logger)
+	runCtx, cancel := context.WithCancel(ctx)
+
+	natsRuntime, err := natsruntime.Start(runCtx, appConfig.Nats, logger)
 	if err != nil {
+		cancel()
 		return nil, err
 	}
-	return &EmbeddedOrisun{store: store, boundary: cfg.Boundary}, nil
+	saveEvents, getEvents, lockProvider, adminDB, eventPublishing, signalProvider, err := sqlitebackend.InitializeSqliteDatabase(
+		runCtx,
+		appConfig.Sqlite,
+		appConfig.Admin,
+		appConfig.GetBoundaryNames(),
+		natsRuntime.JetStream,
+		logger,
+	)
+	if err != nil {
+		cancel()
+		natsRuntime.Close()
+		return nil, err
+	}
+	store, err := orisunapi.NewOrisunServer(runCtx, saveEvents, getEvents, lockProvider, natsRuntime.JetStream, appConfig.GetBoundaryNames(), logger)
+	if err != nil {
+		cancel()
+		natsRuntime.Close()
+		return nil, err
+	}
+	orisunapi.StartEventPolling(runCtx, appConfig, lockProvider, getEvents, natsRuntime.JetStream, eventPublishing, signalProvider, logger)
+
+	return &EmbeddedOrisun{
+		store:        store,
+		retriever:    getEvents,
+		indexManager: adminDB,
+		cancel:       cancel,
+		natsRuntime:  natsRuntime,
+		boundary:     cfg.Boundary,
+	}, nil
 }
 
 func (s *EmbeddedOrisun) Close(ctx context.Context) {
-	if s != nil && s.store != nil {
-		s.store.Close()
+	if s == nil {
+		return
+	}
+	if s.cancel != nil {
+		s.cancel()
+	}
+	if s.natsRuntime != nil {
+		s.natsRuntime.Close()
 	}
 }
 
 func (s *EmbeddedOrisun) NATSConnection() *natsgo.Conn {
-	if s == nil || s.store == nil {
+	if s == nil || s.natsRuntime == nil {
 		return nil
 	}
-	return s.store.NATSConnection()
+	return s.natsRuntime.Conn
 }
 
 func (s *EmbeddedOrisun) SaveEvents(ctx context.Context, events []DomainEvent, expected Position, scopeEvents []ResolvedEvent, subset Query) (WriteResult, error) {
@@ -121,27 +163,39 @@ func (s *EmbeddedOrisun) GetEvents(ctx context.Context, from Position, count int
 	}
 	resolved := make([]ResolvedEvent, 0, len(resp.Events))
 	for _, event := range resp.Events {
-		data := map[string]any{}
-		if event.Data != "" {
-			if err := json.Unmarshal([]byte(event.Data), &data); err != nil {
-				return nil, err
-			}
+		mapped, err := fromOrisunEvent(event)
+		if err != nil {
+			return nil, err
 		}
-		metadata := map[string]any{}
-		if event.Metadata != "" {
-			_ = json.Unmarshal([]byte(event.Metadata), &metadata)
-		}
-		resolved = append(resolved, ResolvedEvent{
-			Position: fromOrisunPosition(event.Position),
-			Event: DomainEvent{
-				EventID:   event.EventId,
-				EventType: event.EventType,
-				Data:      unflattenMap(data),
-				Metadata:  metadata,
-			},
-		})
+		resolved = append(resolved, mapped)
 	}
 	return resolved, nil
+}
+
+func (s *EmbeddedOrisun) GetLatestByCriteria(ctx context.Context, criteria []Criterion) (LatestByCriteriaResult, error) {
+	resp, err := s.retriever.GetLatestByCriteria(ctx, &orisunapi.GetLatestByCriteriaRequest{
+		Boundary: s.boundary,
+		Criteria: toOrisunCriteria(criteria),
+	})
+	if err != nil {
+		return LatestByCriteriaResult{}, err
+	}
+	result := LatestByCriteriaResult{
+		Results:         make([]LatestCriterionResult, 0, len(resp.Results)),
+		ContextPosition: fromOrisunPosition(resp.ContextPosition),
+	}
+	for _, latest := range resp.Results {
+		mapped := LatestCriterionResult{Criterion: fromOrisunCriterion(latest.Criterion)}
+		if latest.Event != nil {
+			event, err := fromOrisunEvent(latest.Event)
+			if err != nil {
+				return LatestByCriteriaResult{}, err
+			}
+			mapped.Event = &event
+		}
+		result.Results = append(result.Results, mapped)
+	}
+	return result, nil
 }
 
 func (s *EmbeddedOrisun) SubscribeToEvents(ctx context.Context, subscriberName string, after Position, query Query, handle func(context.Context, ResolvedEvent) error) error {
@@ -195,6 +249,28 @@ func (s *EmbeddedOrisun) SubscribeToEvents(ctx context.Context, subscriberName s
 	}
 }
 
+func fromOrisunEvent(event *orisunapi.Event) (ResolvedEvent, error) {
+	data := map[string]any{}
+	if event.Data != "" {
+		if err := json.Unmarshal([]byte(event.Data), &data); err != nil {
+			return ResolvedEvent{}, err
+		}
+	}
+	metadata := map[string]any{}
+	if event.Metadata != "" {
+		_ = json.Unmarshal([]byte(event.Metadata), &metadata)
+	}
+	return ResolvedEvent{
+		Position: fromOrisunPosition(event.Position),
+		Event: DomainEvent{
+			EventID:   event.EventId,
+			EventType: event.EventType,
+			Data:      unflattenMap(data),
+			Metadata:  metadata,
+		},
+	}, nil
+}
+
 func toOrisunPosition(position Position) *orisunapi.Position {
 	return &orisunapi.Position{CommitPosition: position.Commit, PreparePosition: position.Prepare}
 }
@@ -210,15 +286,30 @@ func toOrisunQuery(query Query) *orisunapi.Query {
 	if len(query.Criteria) == 0 {
 		return nil
 	}
-	criteria := make([]*orisunapi.Criterion, 0, len(query.Criteria))
-	for _, criterion := range query.Criteria {
+	return &orisunapi.Query{Criteria: toOrisunCriteria(query.Criteria)}
+}
+
+func toOrisunCriteria(input []Criterion) []*orisunapi.Criterion {
+	criteria := make([]*orisunapi.Criterion, 0, len(input))
+	for _, criterion := range input {
 		tags := make([]*orisunapi.Tag, 0, len(criterion.Tags))
 		for _, tag := range criterion.Tags {
 			tags = append(tags, &orisunapi.Tag{Key: tag.Key, Value: tag.Value})
 		}
 		criteria = append(criteria, &orisunapi.Criterion{Tags: tags})
 	}
-	return &orisunapi.Query{Criteria: criteria}
+	return criteria
+}
+
+func fromOrisunCriterion(input *orisunapi.Criterion) Criterion {
+	if input == nil {
+		return Criterion{}
+	}
+	criterion := Criterion{Tags: make([]Tag, 0, len(input.Tags))}
+	for _, tag := range input.Tags {
+		criterion.Tags = append(criterion.Tags, Tag{Key: tag.Key, Value: tag.Value})
+	}
+	return criterion
 }
 
 func flattenMap(input map[string]any) map[string]any {

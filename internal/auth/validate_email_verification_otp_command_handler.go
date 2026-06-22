@@ -36,8 +36,8 @@ func ValidateEmailVerificationOTPCommandHandler(ctx context.Context, command Val
 	}
 
 	validationID := uuidv7.NewString()
-	event := NewEmailVerificationOTPValidatedEvent(validationID, time.Now(), model.otpID, command.User.UserRegisteredID, metadataWithQuery(command.Metadata, model.query))
-	_, err = saver.SaveEvents(ctx, []eventstore.DomainEvent{event}, model.position, model.events, model.query)
+	event := NewEmailVerificationOTPValidatedEvent(validationID, time.Now(), model.otpID, command.User.UserRegisteredID, nil)
+	_, err = eventstore.SaveCommandEvents(ctx, saver, command.Metadata, []eventstore.DomainEvent{event}, model.position, model.events, model.query)
 	return err
 }
 
@@ -80,33 +80,43 @@ func latestEmailVerificationOTP(events []eventstore.ResolvedEvent) latestOTP {
 
 func loadValidateEmailVerificationOTPContext(ctx context.Context, command ValidateEmailVerificationOTPCommand, retriever eventstore.Retriever) (*validateEmailVerificationOTPContext, error) {
 	generatedQuery := emailVerificationOTPGeneratedByUserQuery(command.User.UserRegisteredID)
-	generatedEvents, err := retriever.GetEvents(ctx, eventstore.LastEventPosition, 1, eventstore.Backward, generatedQuery)
-	if err != nil {
-		return nil, err
-	}
-
-	otp := latestEmailVerificationOTP(generatedEvents)
-	validationQuery := emailVerificationOTPValidatedQuery(otp.id)
-	validationEvents, err := retriever.GetEvents(ctx, eventstore.NoEventPosition, 1, eventstore.Forward, validationQuery)
-	if err != nil {
-		return nil, err
-	}
-
 	userQuery := userRegisteredQuery(command.User.UserRegisteredID)
-	userEvents, err := retriever.GetEvents(ctx, eventstore.NoEventPosition, 1, eventstore.Forward, userQuery)
-	if err != nil {
-		return nil, err
+
+	var (
+		events []eventstore.ResolvedEvent
+		latest eventstore.LatestByCriteriaResult
+		otp    latestOTP
+		query  eventstore.Query
+		otpID  string
+		stable bool
+	)
+	for range 5 {
+		validationQuery := emailVerificationOTPValidatedQuery(otpID)
+		query = combineQueries(generatedQuery, validationQuery, userQuery)
+		var err error
+		latest, err = retriever.GetLatestByCriteria(ctx, query.Criteria)
+		if err != nil {
+			return nil, err
+		}
+		events = eventstore.EventsFromLatest(latest.Results)
+		otp = latestEmailVerificationOTP(events)
+		if otp.id == otpID || otp.id == "" {
+			stable = true
+			break
+		}
+		otpID = otp.id
+	}
+	if !stable {
+		return nil, eventstore.ErrConflict
 	}
 
-	events := append(append([]eventstore.ResolvedEvent{}, generatedEvents...), validationEvents...)
-	events = append(events, userEvents...)
 	model := &validateEmailVerificationOTPContext{
 		otpID:     otp.id,
 		code:      otp.code,
 		expiresAt: otp.expiresAt,
-		position:  eventstore.NoEventPosition,
+		position:  latest.ContextPosition,
 		events:    events,
-		query:     combineQueries(generatedQuery, validationQuery, userQuery),
+		query:     query,
 	}
 	for _, event := range events {
 		model.handle(event)

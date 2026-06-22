@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"strings"
 
 	"github.com/oexza/go-orisun-datastar/internal/appdb"
 	"github.com/oexza/go-orisun-datastar/internal/dbsql"
@@ -15,6 +16,44 @@ type AuthUserStore struct {
 
 func NewAuthUserStore(db *appdb.DB) *AuthUserStore {
 	return &AuthUserStore{db: db}
+}
+
+func (s *AuthUserStore) CreateRegisteredUserAccount(ctx context.Context, registered RegisterUserResult) error {
+	userID := registered.UserRegisteredID
+	name := strings.TrimSpace(registered.FirstName + " " + registered.LastName)
+	if name == "" {
+		name = registered.Username
+	}
+	if err := s.db.WriteTX(ctx, func(conn *sqlite.Conn) error {
+		if err := dbsql.OnceCreateAuthUser(conn, dbsql.CreateAuthUserParams{
+			Id:               userID,
+			Name:             name,
+			Email:            registered.Email,
+			Username:         stringPtr(registered.Username),
+			UserRegisteredId: registered.UserRegisteredID,
+		}); err != nil {
+			return err
+		}
+		if registered.PasswordHash == "" {
+			return nil
+		}
+		user, err := dbsql.OnceUserByRegisteredId(conn, registered.UserRegisteredID)
+		if err != nil {
+			return err
+		}
+		if user == nil {
+			return appdb.ErrNoRows
+		}
+		return dbsql.OnceCreateAuthAccount(conn, dbsql.CreateAuthAccountParams{
+			Id:        registered.UserRegisteredID + ":credential",
+			AccountId: registered.Email,
+			UserId:    user.Id,
+			Password:  stringPtr(registered.PasswordHash),
+		})
+	}); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *AuthUserStore) UserBySessionToken(ctx context.Context, token string) (views.User, error) {
@@ -68,7 +107,28 @@ func (s *AuthUserStore) MarkEmailVerified(ctx context.Context, userRegisteredID 
 	})
 }
 
-func (s *AuthUserStore) userByEmailWithPassword(ctx context.Context, emailAddress string) (views.User, string, error) {
+func (s *AuthUserStore) UpdateName(ctx context.Context, userID, name string) error {
+	return s.db.WriteTX(ctx, func(conn *sqlite.Conn) error {
+		return dbsql.OnceUpdateAuthUserName(conn, dbsql.UpdateAuthUserNameParams{Name: name, Id: userID})
+	})
+}
+
+func (s *AuthUserStore) UpdateNameByRegisteredID(ctx context.Context, userRegisteredID, name string) error {
+	return s.db.WriteTX(ctx, func(conn *sqlite.Conn) error {
+		return dbsql.OnceUpdateAuthUserNameByRegisteredId(conn, dbsql.UpdateAuthUserNameByRegisteredIdParams{Name: name, UserRegisteredId: userRegisteredID})
+	})
+}
+
+func (s *AuthUserStore) UpdatePasswordByRegisteredID(ctx context.Context, userRegisteredID, passwordHash string) error {
+	return s.db.WriteTX(ctx, func(conn *sqlite.Conn) error {
+		return dbsql.OnceUpdateAuthAccountPasswordByRegisteredId(conn, dbsql.UpdateAuthAccountPasswordByRegisteredIdParams{
+			Password:         stringPtr(passwordHash),
+			UserRegisteredId: userRegisteredID,
+		})
+	})
+}
+
+func (s *AuthUserStore) UserByEmailWithPassword(ctx context.Context, emailAddress string) (views.User, string, error) {
 	var row *dbsql.UserByEmailWithPasswordRes
 	if err := s.db.ReadTX(ctx, func(conn *sqlite.Conn) error {
 		var err error

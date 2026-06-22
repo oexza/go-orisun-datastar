@@ -24,7 +24,7 @@ type CreateAuthUserStmt struct {
 
 func CreateAuthUser(tx *sqlite.Conn) *CreateAuthUserStmt {
 	const querySQL = `
-INSERT INTO auth_user (id, name, email, email_verified, username, display_username, user_registered_id)
+INSERT OR IGNORE INTO auth_user (id, name, email, email_verified, username, display_username, user_registered_id)
 VALUES (?1, ?2, ?3, false, ?4, ?4, ?5)
     `
 

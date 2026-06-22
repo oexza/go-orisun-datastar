@@ -11,17 +11,14 @@ import (
 
 const RegistrationOTPToBeGeneratedEventHandlerName = "todo_registration_otp_to_be_generated_event_handler"
 
-type EmailVerificationOTPIssuer interface {
-	GenerateEmailVerificationOTPWithMetadata(ctx context.Context, user views.User, metadata CommandMetadata) error
-}
-
 type RegistrationOTPToBeGeneratedEventHandler struct {
-	global *eventstore.GlobalEventHandler
-	issuer EmailVerificationOTPIssuer
+	global    *eventstore.GlobalEventHandler
+	saver     eventstore.Saver
+	retriever eventstore.Retriever
 }
 
-func NewRegistrationOTPToBeGeneratedEventHandler(subscriber eventstore.Subscriber, checkpointer eventstore.Checkpointer, issuer EmailVerificationOTPIssuer, logger *slog.Logger) (*RegistrationOTPToBeGeneratedEventHandler, error) {
-	handler := &RegistrationOTPToBeGeneratedEventHandler{issuer: issuer}
+func NewRegistrationOTPToBeGeneratedEventHandler(subscriber eventstore.Subscriber, checkpointer eventstore.Checkpointer, saver eventstore.Saver, retriever eventstore.Retriever, logger *slog.Logger) (*RegistrationOTPToBeGeneratedEventHandler, error) {
+	handler := &RegistrationOTPToBeGeneratedEventHandler{saver: saver, retriever: retriever}
 	global, err := eventstore.NewGlobalEventHandler(eventstore.GlobalEventHandlerConfig{
 		Subscriber:      subscriber,
 		Checkpointer:    checkpointer,
@@ -55,12 +52,17 @@ func (h *RegistrationOTPToBeGeneratedEventHandler) handle(ctx context.Context, r
 	firstName, _ := resolved.Event.Data["firstName"].(string)
 	lastName, _ := resolved.Event.Data["lastName"].(string)
 	username, _ := resolved.Event.Data["username"].(string)
-	return h.issuer.GenerateEmailVerificationOTPWithMetadata(ctx, views.User{
+	user := views.User{
 		UserRegisteredID: userRegisteredID,
 		Name:             strings.TrimSpace(firstName + " " + lastName),
 		Username:         username,
 		Email:            emailAddress,
-	}, eventstore.EventHandlerCommandMetadata(RegistrationOTPToBeGeneratedEventHandlerName, resolved))
+	}
+	_, err := GenerateEmailVerificationOTPCommandHandler(ctx, GenerateEmailVerificationOTPCommand{
+		User:     user,
+		Metadata: eventstore.EventHandlerCommandMetadata(RegistrationOTPToBeGeneratedEventHandlerName, resolved),
+	}, h.saver, h.retriever)
+	return err
 }
 
 func userRegisteredEventHandlerQuery() eventstore.Query {

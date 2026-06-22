@@ -40,8 +40,8 @@ func GenerateEmailVerificationOTPCommandHandler(ctx context.Context, command Gen
 	}
 	otpID := uuidv7.NewString()
 	expiresAt := time.Now().Add(15 * time.Minute)
-	event := NewEmailVerificationOTPGeneratedEvent(otpID, code, expiresAt, command.User.UserRegisteredID, metadataWithQuery(command.Metadata, model.query))
-	if _, err := saver.SaveEvents(ctx, []eventstore.DomainEvent{event}, model.position, model.events, model.query); err != nil {
+	event := NewEmailVerificationOTPGeneratedEvent(otpID, code, expiresAt, command.User.UserRegisteredID, nil)
+	if _, err := eventstore.SaveCommandEvents(ctx, saver, command.Metadata, []eventstore.DomainEvent{event}, model.position, model.events, model.query); err != nil {
 		return GenerateEmailVerificationOTPResult{}, err
 	}
 	return GenerateEmailVerificationOTPResult{EmailVerificationOTPGeneratedID: otpID, Code: code, ExpiresAt: expiresAt}, nil
@@ -61,17 +61,13 @@ func loadGenerateEmailVerificationOTPContext(ctx context.Context, command Genera
 	stateQuery := emailVerificationOTPStateQuery(command.User.UserRegisteredID)
 	query := combineQueries(userQuery, stateQuery)
 
-	userEvents, err := retriever.GetEvents(ctx, eventstore.NoEventPosition, 1, eventstore.Forward, userQuery)
-	if err != nil {
-		return nil, err
-	}
-	stateEvents, err := retriever.GetEvents(ctx, eventstore.LastEventPosition, 1, eventstore.Backward, stateQuery)
+	latest, err := retriever.GetLatestByCriteria(ctx, query.Criteria)
 	if err != nil {
 		return nil, err
 	}
 
-	events := append(append([]eventstore.ResolvedEvent{}, userEvents...), stateEvents...)
-	model := &generateEmailVerificationOTPContext{position: eventstore.NoEventPosition, events: events, query: query}
+	events := eventstore.EventsFromLatest(latest.Results)
+	model := &generateEmailVerificationOTPContext{position: latest.ContextPosition, events: events, query: query}
 	for _, event := range events {
 		model.handle(event)
 	}

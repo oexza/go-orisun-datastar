@@ -47,12 +47,6 @@ func (s Server) todosStream(w http.ResponseWriter, r *http.Request) {
 	key := viewstore.TodoListKey(s.sessionID(r), user.UserRegisteredID)
 
 	updates := make(chan struct{}, 1)
-	notify := func() {
-		select {
-		case updates <- struct{}{}:
-		default:
-		}
-	}
 
 	if err := s.refreshTodoViewState(ctx, key, user.UserRegisteredID); err != nil {
 		_ = alert(sse, err.Error())
@@ -66,14 +60,14 @@ func (s Server) todosStream(w http.ResponseWriter, r *http.Request) {
 	defer watcher.Stop()
 
 	sub, err := s.Subscriber.Subscribe(ctx, todo.Channel(user.UserRegisteredID), func(context.Context, []byte) {
-		notify()
+		notifyOnce(updates)
 	})
 	if err != nil {
 		return
 	}
 	defer sub.Close()
 
-	notify()
+	notifyOnce(updates)
 
 	for {
 		select {

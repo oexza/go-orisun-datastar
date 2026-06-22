@@ -29,7 +29,7 @@ func (s *EmbeddedOrisun) EnsureBoundaryIndexes(ctx context.Context, definitions 
 		if len(conditions) > 1 {
 			combinator = orisunapi.IndexCombinatorOR
 		}
-		if err := s.store.CreateBoundaryIndex(ctx, s.boundary, definition.Name, fields, conditions, combinator); err != nil && !isDuplicateIndexError(err) {
+		if err := s.indexManager.CreateBoundaryIndex(ctx, s.boundary, definition.Name, fields, conditions, combinator); err != nil && !isDuplicateIndexError(err) {
 			return err
 		}
 	}

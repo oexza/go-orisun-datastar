@@ -6,6 +6,7 @@ import (
 
 	"github.com/oexza/go-orisun-datastar/internal/appdb"
 	"github.com/oexza/go-orisun-datastar/internal/dbsql"
+	"github.com/oexza/go-orisun-datastar/internal/views"
 	"zombiezen.com/go/sqlite"
 
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
@@ -22,6 +23,31 @@ type ReadModel struct {
 
 func NewReadModel(db *appdb.DB) *ReadModel {
 	return &ReadModel{db: db}
+}
+
+func (m *ReadModel) User(ctx context.Context, userRegisteredID string) (views.User, error) {
+	var row *dbsql.ProfileUserRes
+	err := m.db.ReadTX(ctx, func(conn *sqlite.Conn) error {
+		var err error
+		row, err = dbsql.OnceProfileUser(conn, userRegisteredID)
+		return err
+	})
+	if err != nil {
+		return views.User{}, err
+	}
+	if row == nil {
+		return views.User{}, appdb.ErrNoRows
+	}
+	return views.User{
+		ID:               row.UserId,
+		UserRegisteredID: row.UserId,
+		Name:             row.Name,
+		Username:         row.Username,
+		Email:            row.Email,
+		Image:            row.Image,
+		Bio:              row.Bio,
+		HeaderImageURL:   row.HeaderImageUrl,
+	}, nil
 }
 
 func (m *ReadModel) UpsertRegisteredUser(ctx context.Context, resolved eventstore.ResolvedEvent) error {

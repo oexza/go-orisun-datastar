@@ -33,9 +33,9 @@ func CompleteTodoCommandHandler(ctx context.Context, command CompleteTodoCommand
 	}
 
 	eventID := uuidv7.NewString()
-	event := NewTodoCompletedEvent(eventID, command.TodoID, command.UserRegisteredID, time.Now(), metadataWithQuery(command.Metadata, model.query))
+	event := NewTodoCompletedEvent(eventID, command.TodoID, command.UserRegisteredID, time.Now(), nil)
 
-	if _, err := saver.SaveEvents(ctx, []eventstore.DomainEvent{event}, model.position, model.events, model.query); err != nil {
+	if _, err := eventstore.SaveCommandEvents(ctx, saver, command.Metadata, []eventstore.DomainEvent{event}, model.position, model.events, model.query); err != nil {
 		return CompleteTodoResult{}, err
 	}
 	return CompleteTodoResult{TodoCompletedID: eventID}, nil
@@ -52,12 +52,13 @@ type completeTodoContext struct {
 
 func loadCompleteTodoContext(ctx context.Context, retriever eventstore.Retriever, todoID, userRegisteredID string) (*completeTodoContext, error) {
 	query := streamQuery(todoID, userRegisteredID)
-	events, err := retriever.GetEvents(ctx, eventstore.NoEventPosition, 100, eventstore.Forward, query)
+	latest, err := retriever.GetLatestByCriteria(ctx, query.Criteria)
 	if err != nil {
 		return nil, err
 	}
+	events := eventstore.EventsFromLatest(latest.Results)
 
-	model := &completeTodoContext{position: eventstore.NoEventPosition, events: events, query: query}
+	model := &completeTodoContext{position: latest.ContextPosition, events: events, query: query}
 	for _, event := range events {
 		model.handle(event)
 	}

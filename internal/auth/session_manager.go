@@ -32,7 +32,7 @@ func NewSessionManager(db *appdb.DB, users *AuthUserStore, secureCookie bool) *S
 }
 
 func (s *SessionManager) Login(ctx context.Context, emailAddress, password string) (views.User, string, error) {
-	user, hash, err := s.users.userByEmailWithPassword(ctx, strings.ToLower(strings.TrimSpace(emailAddress)))
+	user, hash, err := s.users.UserByEmailWithPassword(ctx, strings.ToLower(strings.TrimSpace(emailAddress)))
 	if err != nil {
 		return views.User{}, "", errors.New("invalid email or password")
 	}

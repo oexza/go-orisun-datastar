@@ -30,22 +30,18 @@ type passwordResetEmailContext struct {
 
 func SendPasswordResetEmailCommandHandler(ctx context.Context, command SendPasswordResetEmailCommand, saver eventstore.Saver, retriever eventstore.Retriever, sender EmailSender, appURL string) error {
 	requestedQuery := passwordResetRequestedQuery(command.PasswordResetRequestedID)
-	requestedEvents, err := retriever.GetEvents(ctx, eventstore.NoEventPosition, 1, eventstore.Forward, requestedQuery)
-	if err != nil {
-		return err
-	}
-
 	sentQuery := passwordResetEmailSentQuery(command.PasswordResetRequestedID)
-	sentEvents, err := retriever.GetEvents(ctx, eventstore.NoEventPosition, 1, eventstore.Forward, sentQuery)
+	query := combineQueries(requestedQuery, sentQuery)
+	latest, err := retriever.GetLatestByCriteria(ctx, query.Criteria)
 	if err != nil {
 		return err
 	}
 
-	events := append(append([]eventstore.ResolvedEvent{}, requestedEvents...), sentEvents...)
+	events := eventstore.EventsFromLatest(latest.Results)
 	model := passwordResetEmailContext{
-		position: eventstore.NoEventPosition,
+		position: latest.ContextPosition,
 		events:   events,
-		query:    combineQueries(requestedQuery, sentQuery),
+		query:    query,
 	}
 	for _, resolved := range model.events {
 		model.handle(resolved)
@@ -67,8 +63,8 @@ func SendPasswordResetEmailCommandHandler(ctx context.Context, command SendPassw
 	}
 
 	id := uuidv7.NewString()
-	sent := NewPasswordResetEmailSentEvent(id, time.Now(), command.PasswordResetRequestedID, metadataWithQuery(command.Metadata, model.query))
-	_, err = saver.SaveEvents(ctx, []eventstore.DomainEvent{sent}, model.position, model.events, model.query)
+	sent := NewPasswordResetEmailSentEvent(id, time.Now(), command.PasswordResetRequestedID, nil)
+	_, err = eventstore.SaveCommandEvents(ctx, saver, command.Metadata, []eventstore.DomainEvent{sent}, model.position, model.events, model.query)
 	return err
 }
 

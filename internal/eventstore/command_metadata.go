@@ -1,6 +1,7 @@
 package eventstore
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"strings"
@@ -44,6 +45,19 @@ func EventHandlerCommandMetadata(handlerName string, resolved ResolvedEvent) Com
 			"position":  resolved.Position,
 		},
 	}}
+}
+
+func CommandMetadataWithQuery(commandMetadata CommandMetadata, query Query) CommandMetadata {
+	return MergeMetadata(map[string]any{"query": MustJSON(query)}, commandMetadata)
+}
+
+func SaveCommandEvents(ctx context.Context, saver Saver, commandMetadata CommandMetadata, events []DomainEvent, expected Position, scopeEvents []ResolvedEvent, subset Query) (WriteResult, error) {
+	merged := make([]DomainEvent, 0, len(events))
+	for _, event := range events {
+		event.Metadata = MergeMetadata(event.Metadata, CommandMetadataWithQuery(commandMetadata, subset))
+		merged = append(merged, event)
+	}
+	return saver.SaveEvents(ctx, merged, expected, scopeEvents, subset)
 }
 
 func MergeMetadata(eventMetadata map[string]any, commandMetadata CommandMetadata) map[string]any {

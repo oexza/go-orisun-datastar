@@ -1,9 +1,9 @@
 -- name: CreateAuthUser :exec
-INSERT INTO auth_user (id, name, email, email_verified, username, display_username, user_registered_id)
+INSERT OR IGNORE INTO auth_user (id, name, email, email_verified, username, display_username, user_registered_id)
 VALUES (@id, @name, @email, false, @username, @username, @user_registered_id);
 
 -- name: CreateAuthAccount :exec
-INSERT INTO auth_account (id, account_id, provider_id, user_id, password)
+INSERT OR IGNORE INTO auth_account (id, account_id, provider_id, user_id, password)
 VALUES (@id, @account_id, 'credential', @user_id, @password);
 
 -- name: CreateAuthSession :exec
@@ -59,7 +59,7 @@ LEFT JOIN profile_stats p ON p.user_id = u.user_registered_id
 WHERE u.id = @id OR u.user_registered_id = @id;
 
 -- name: CreateAuthVerification :exec
-INSERT INTO auth_verification (id, identifier, value, expires_at)
+INSERT OR IGNORE INTO auth_verification (id, identifier, value, expires_at)
 VALUES (@id, @identifier, @value, @expires_at);
 
 -- name: UpdateAuthUserImage :exec
@@ -89,11 +89,28 @@ SET name = @name,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = @id;
 
+-- name: UpdateAuthUserNameByRegisteredID :exec
+UPDATE auth_user
+SET name = @name,
+    updated_at = CURRENT_TIMESTAMP
+WHERE user_registered_id = @user_registered_id;
+
 -- name: UpdateAuthAccountPassword :exec
 UPDATE auth_account
 SET password = @password,
     updated_at = CURRENT_TIMESTAMP
 WHERE user_id = @user_id
+  AND provider_id = 'credential';
+
+-- name: UpdateAuthAccountPasswordByRegisteredID :exec
+UPDATE auth_account
+SET password = @password,
+    updated_at = CURRENT_TIMESTAMP
+WHERE user_id = (
+    SELECT id
+    FROM auth_user
+    WHERE user_registered_id = @user_registered_id
+)
   AND provider_id = 'credential';
 
 -- name: UserByEmailWithPassword :one
