@@ -35,8 +35,8 @@ func UpdateUserNameCommandHandler(ctx context.Context, command UpdateUserNameCom
 	}
 
 	eventID := uuidv7.NewString()
-	event := NewUserNameChangedEvent(eventID, model.nextName, time.Now(), command.User.UserRegisteredID, metadataWithQuery(command.Metadata, model.query))
-	if _, err := saver.SaveEvents(ctx, []eventstore.DomainEvent{event}, model.position, model.events, model.query); err != nil {
+	event := NewUserNameChangedEvent(eventID, model.nextName, time.Now(), command.User.UserRegisteredID, nil)
+	if _, err := eventstore.SaveCommandEvents(ctx, saver, command.Metadata, []eventstore.DomainEvent{event}, model.position, model.events, model.query); err != nil {
 		return UpdateUserNameResult{}, err
 	}
 	return UpdateUserNameResult{Name: model.nextName}, nil

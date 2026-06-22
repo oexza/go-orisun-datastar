@@ -40,8 +40,8 @@ func GenerateEmailVerificationOTPCommandHandler(ctx context.Context, command Gen
 	}
 	otpID := uuidv7.NewString()
 	expiresAt := time.Now().Add(15 * time.Minute)
-	event := NewEmailVerificationOTPGeneratedEvent(otpID, code, expiresAt, command.User.UserRegisteredID, metadataWithQuery(command.Metadata, model.query))
-	if _, err := saver.SaveEvents(ctx, []eventstore.DomainEvent{event}, model.position, model.events, model.query); err != nil {
+	event := NewEmailVerificationOTPGeneratedEvent(otpID, code, expiresAt, command.User.UserRegisteredID, nil)
+	if _, err := eventstore.SaveCommandEvents(ctx, saver, command.Metadata, []eventstore.DomainEvent{event}, model.position, model.events, model.query); err != nil {
 		return GenerateEmailVerificationOTPResult{}, err
 	}
 	return GenerateEmailVerificationOTPResult{EmailVerificationOTPGeneratedID: otpID, Code: code, ExpiresAt: expiresAt}, nil

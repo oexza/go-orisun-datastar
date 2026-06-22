@@ -15,7 +15,7 @@ import (
 type UpdateProfileBioCommand struct {
 	User     views.User
 	Bio      string
-	Metadata map[string]any
+	Metadata eventstore.CommandMetadata
 }
 
 func UpdateProfileBioCommandHandler(ctx context.Context, command UpdateProfileBioCommand, saver eventstore.Saver, retriever eventstore.Retriever) error {
@@ -26,8 +26,8 @@ func UpdateProfileBioCommandHandler(ctx context.Context, command UpdateProfileBi
 	if model.bio == model.nextBio {
 		return nil
 	}
-	event := NewProfileBioUpdatedEvent(model.eventID, model.nextBio, time.Now(), command.User.UserRegisteredID, metadataWithQuery(command.Metadata, model.query))
-	_, err = saver.SaveEvents(ctx, []eventstore.DomainEvent{event}, model.position, model.events, model.query)
+	event := NewProfileBioUpdatedEvent(model.eventID, model.nextBio, time.Now(), command.User.UserRegisteredID, nil)
+	_, err = eventstore.SaveCommandEvents(ctx, saver, command.Metadata, []eventstore.DomainEvent{event}, model.position, model.events, model.query)
 	return err
 }
 

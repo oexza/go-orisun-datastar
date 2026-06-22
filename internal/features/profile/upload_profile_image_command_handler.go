@@ -18,7 +18,7 @@ type UploadProfileImageCommand struct {
 	Data        []byte
 	ContentType string
 	Header      bool
-	Metadata    map[string]any
+	Metadata    eventstore.CommandMetadata
 }
 
 type UploadProfileImageResult struct {
@@ -34,11 +34,11 @@ func UploadProfileImageCommandHandler(ctx context.Context, command UploadProfile
 		return UploadProfileImageResult{}, err
 	}
 	url := storage.PublicURL(model.key)
-	event := NewProfileImageUploadedEvent(model.eventID, url, time.Now(), command.User.UserRegisteredID, metadataWithQuery(command.Metadata, model.query))
+	event := NewProfileImageUploadedEvent(model.eventID, url, time.Now(), command.User.UserRegisteredID, nil)
 	if command.Header {
-		event = NewProfileHeaderImageUploadedEvent(model.eventID, url, time.Now(), command.User.UserRegisteredID, metadataWithQuery(command.Metadata, model.query))
+		event = NewProfileHeaderImageUploadedEvent(model.eventID, url, time.Now(), command.User.UserRegisteredID, nil)
 	}
-	if _, err := saver.SaveEvents(ctx, []eventstore.DomainEvent{event}, model.position, model.events, model.query); err != nil {
+	if _, err := eventstore.SaveCommandEvents(ctx, saver, command.Metadata, []eventstore.DomainEvent{event}, model.position, model.events, model.query); err != nil {
 		return UploadProfileImageResult{}, err
 	}
 	return UploadProfileImageResult{URL: url}, nil

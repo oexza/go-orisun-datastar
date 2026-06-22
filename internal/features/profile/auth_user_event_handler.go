@@ -14,12 +14,13 @@ type AuthUserImageBridge interface {
 }
 
 type ProfileImageUploadedAuthUserEventHandler struct {
-	global *eventstore.GlobalEventHandler
-	bridge AuthUserImageBridge
+	global    *eventstore.GlobalEventHandler
+	bridge    AuthUserImageBridge
+	publisher eventstore.Publisher
 }
 
-func NewProfileImageUploadedAuthUserEventHandler(subscriber eventstore.Subscriber, checkpointer eventstore.Checkpointer, bridge AuthUserImageBridge, logger *slog.Logger) (*ProfileImageUploadedAuthUserEventHandler, error) {
-	handler := &ProfileImageUploadedAuthUserEventHandler{bridge: bridge}
+func NewProfileImageUploadedAuthUserEventHandler(subscriber eventstore.Subscriber, checkpointer eventstore.Checkpointer, bridge AuthUserImageBridge, publisher eventstore.Publisher, logger *slog.Logger) (*ProfileImageUploadedAuthUserEventHandler, error) {
+	handler := &ProfileImageUploadedAuthUserEventHandler{bridge: bridge, publisher: publisher}
 	global, err := eventstore.NewGlobalEventHandler(eventstore.GlobalEventHandlerConfig{
 		Subscriber:      subscriber,
 		Checkpointer:    checkpointer,
@@ -53,7 +54,10 @@ func (h *ProfileImageUploadedAuthUserEventHandler) handle(ctx context.Context, r
 	if userRegisteredID == "" || imageURL == "" {
 		return nil
 	}
-	return h.bridge.UpdateImage(ctx, userRegisteredID, imageURL)
+	if err := h.bridge.UpdateImage(ctx, userRegisteredID, imageURL); err != nil {
+		return err
+	}
+	return h.publisher.Publish(ctx, Channel(userRegisteredID), map[string]string{"userRegisteredId": userRegisteredID})
 }
 
 func profileImageUploadedAuthUserEventHandlerQuery() eventstore.Query {

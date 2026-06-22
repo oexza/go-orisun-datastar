@@ -39,9 +39,9 @@ func RenameTodoCommandHandler(ctx context.Context, command RenameTodoCommand, sa
 	}
 
 	eventID := uuidv7.NewString()
-	event := NewTodoRenamedEvent(eventID, command.TodoID, command.UserRegisteredID, title, time.Now(), metadataWithQuery(command.Metadata, model.query))
+	event := NewTodoRenamedEvent(eventID, command.TodoID, command.UserRegisteredID, title, time.Now(), nil)
 
-	if _, err := saver.SaveEvents(ctx, []eventstore.DomainEvent{event}, model.position, model.events, model.query); err != nil {
+	if _, err := eventstore.SaveCommandEvents(ctx, saver, command.Metadata, []eventstore.DomainEvent{event}, model.position, model.events, model.query); err != nil {
 		return RenameTodoResult{}, err
 	}
 	return RenameTodoResult{TodoRenamedID: eventID}, nil

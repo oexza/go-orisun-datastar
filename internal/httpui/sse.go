@@ -1,10 +1,13 @@
 package httpui
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/a-h/templ"
 	"github.com/starfederation/datastar-go/datastar"
+
+	"github.com/oexza/go-orisun-datastar/internal/viewstore"
 )
 
 func writeSSE(w http.ResponseWriter, r *http.Request, fn func(*datastar.ServerSentEventGenerator) error) {
@@ -23,6 +26,42 @@ func emptySSE(w http.ResponseWriter, r *http.Request, err error) {
 		return
 	}
 	writeSSE(w, r, clearFlash)
+}
+
+func actionSSE(w http.ResponseWriter, r *http.Request, action func(*datastar.ServerSentEventGenerator) error) {
+	writeSSE(w, r, func(sse *datastar.ServerSentEventGenerator) error {
+		if err := clearFlash(sse); err != nil {
+			return err
+		}
+		return action(sse)
+	})
+}
+
+func notifyOnce(updates chan<- struct{}) {
+	select {
+	case updates <- struct{}{}:
+	default:
+	}
+}
+
+func watchViewState[T any](ctx context.Context, watcher viewstore.Watcher, onUpdate func(T) error) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case entry, ok := <-watcher.Updates():
+			if !ok {
+				return nil
+			}
+			var state T
+			if err := entry.JSON(&state); err != nil {
+				return err
+			}
+			if err := onUpdate(state); err != nil {
+				return err
+			}
+		}
+	}
 }
 
 func clearNewTodoTitle(sse *datastar.ServerSentEventGenerator) error {

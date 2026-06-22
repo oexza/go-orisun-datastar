@@ -36,8 +36,8 @@ func ValidateEmailVerificationOTPCommandHandler(ctx context.Context, command Val
 	}
 
 	validationID := uuidv7.NewString()
-	event := NewEmailVerificationOTPValidatedEvent(validationID, time.Now(), model.otpID, command.User.UserRegisteredID, metadataWithQuery(command.Metadata, model.query))
-	_, err = saver.SaveEvents(ctx, []eventstore.DomainEvent{event}, model.position, model.events, model.query)
+	event := NewEmailVerificationOTPValidatedEvent(validationID, time.Now(), model.otpID, command.User.UserRegisteredID, nil)
+	_, err = eventstore.SaveCommandEvents(ctx, saver, command.Metadata, []eventstore.DomainEvent{event}, model.position, model.events, model.query)
 	return err
 }
 

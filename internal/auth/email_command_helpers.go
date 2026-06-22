@@ -99,7 +99,3 @@ func combineQueries(queries ...eventstore.Query) eventstore.Query {
 	}
 	return combined
 }
-
-func metadataWithQuery(metadata CommandMetadata, query eventstore.Query) map[string]any {
-	return eventstore.MergeMetadata(map[string]any{"query": eventstore.MustJSON(query)}, metadata)
-}

@@ -89,11 +89,28 @@ SET name = @name,
     updated_at = now()
 WHERE id = @id;
 
+-- name: UpdateAuthUserNameByRegisteredID :exec
+UPDATE auth_user
+SET name = @name,
+    updated_at = now()
+WHERE user_registered_id = @user_registered_id;
+
 -- name: UpdateAuthAccountPassword :exec
 UPDATE auth_account
 SET password = @password,
     updated_at = now()
 WHERE user_id = @user_id
+  AND provider_id = 'credential';
+
+-- name: UpdateAuthAccountPasswordByRegisteredID :exec
+UPDATE auth_account
+SET password = @password,
+    updated_at = now()
+WHERE user_id = (
+    SELECT id
+    FROM auth_user
+    WHERE user_registered_id = @user_registered_id
+)
   AND provider_id = 'credential';
 
 -- name: UserByEmailWithPassword :one

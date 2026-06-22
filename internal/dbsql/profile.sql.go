@@ -9,6 +9,43 @@ import (
 	"context"
 )
 
+const profileUser = `-- name: ProfileUser :one
+SELECT user_id,
+       coalesce(name, '') AS name,
+       coalesce(username, '') AS username,
+       coalesce(email, '') AS email,
+       coalesce(image, '') AS image,
+       coalesce(bio, '') AS bio,
+       coalesce(header_image_url, '') AS header_image_url
+FROM profile_stats
+WHERE user_id = $1
+`
+
+type ProfileUserRow struct {
+	UserID         string `json:"user_id"`
+	Name           string `json:"name"`
+	Username       string `json:"username"`
+	Email          string `json:"email"`
+	Image          string `json:"image"`
+	Bio            string `json:"bio"`
+	HeaderImageUrl string `json:"header_image_url"`
+}
+
+func (q *Queries) ProfileUser(ctx context.Context, userID string) (ProfileUserRow, error) {
+	row := q.db.QueryRow(ctx, profileUser, userID)
+	var i ProfileUserRow
+	err := row.Scan(
+		&i.UserID,
+		&i.Name,
+		&i.Username,
+		&i.Email,
+		&i.Image,
+		&i.Bio,
+		&i.HeaderImageUrl,
+	)
+	return i, err
+}
+
 const upsertProfileBio = `-- name: UpsertProfileBio :exec
 INSERT INTO profile_stats (user_id, bio, last_event_commit_position, last_event_prepare_position)
 VALUES ($1, $2, $3, $4)

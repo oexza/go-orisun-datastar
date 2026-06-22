@@ -25,6 +25,7 @@ const (
 	UserRegisteredFirstNameField              = "firstName"
 	UserRegisteredLastNameField               = "lastName"
 	UserRegisteredYearOfBirthField            = "yearOfBirth"
+	UserRegisteredPasswordHashField           = "passwordHash"
 	UserNameChangedIDField                    = "userNameChangedId"
 	UserNameChangedNameField                  = "name"
 	UserNameChangedChangedAtField             = "changedAt"
@@ -43,8 +44,10 @@ const (
 	PasswordResetEmailSentAtField             = "sentAt"
 	PasswordResetCompletedIDField             = "passwordResetCompletedId"
 	PasswordResetCompletedResetAtField        = "resetAt"
+	PasswordResetCompletedPasswordHashField   = "passwordHash"
 	PasswordChangedIDField                    = "passwordChangedId"
 	PasswordChangedAtField                    = "changedAt"
+	PasswordChangedPasswordHashField          = "passwordHash"
 	ScopeUserRegisteredIDField                = "scope.userRegisteredId"
 	ScopeEmailVerificationOTPGeneratedIDField = "scope.emailVerificationOTPGeneratedId"
 	ScopePasswordResetRequestedIDField        = "scope.passwordResetRequestedId"
@@ -57,6 +60,7 @@ type UserRegisteredEvent struct {
 	FirstName        string         `json:"firstName"`
 	LastName         string         `json:"lastName"`
 	YearOfBirth      int            `json:"yearOfBirth"`
+	PasswordHash     string         `json:"passwordHash"`
 	Scope            map[string]any `json:"scope"`
 }
 
@@ -103,12 +107,14 @@ type PasswordResetEmailSentEvent struct {
 type PasswordResetCompletedEvent struct {
 	PasswordResetCompletedID string                      `json:"passwordResetCompletedId"`
 	ResetAt                  string                      `json:"resetAt"`
+	PasswordHash             string                      `json:"passwordHash"`
 	Scope                    PasswordResetCompletedScope `json:"scope"`
 }
 
 type PasswordChangedEvent struct {
 	PasswordChangedID string              `json:"passwordChangedId"`
 	ChangedAt         string              `json:"changedAt"`
+	PasswordHash      string              `json:"passwordHash"`
 	Scope             UserRegisteredScope `json:"scope"`
 }
 
@@ -134,7 +140,7 @@ type PasswordResetCompletedScope struct {
 	UserRegisteredID         string `json:"userRegisteredId"`
 }
 
-func NewUserRegisteredEvent(userRegisteredID, username, emailAddress, firstName, lastName string, yearOfBirth int, metadata map[string]any) eventstore.DomainEvent {
+func NewUserRegisteredEvent(userRegisteredID, username, emailAddress, firstName, lastName string, yearOfBirth int, passwordHash string, metadata map[string]any) eventstore.DomainEvent {
 	return eventstore.DomainEvent{
 		EventID:   userRegisteredID,
 		EventType: UserRegistered,
@@ -145,6 +151,7 @@ func NewUserRegisteredEvent(userRegisteredID, username, emailAddress, firstName,
 			FirstName:        firstName,
 			LastName:         lastName,
 			YearOfBirth:      yearOfBirth,
+			PasswordHash:     passwordHash,
 			Scope:            map[string]any{},
 		}),
 		Metadata: metadata,
@@ -236,13 +243,14 @@ func NewPasswordResetEmailSentEvent(passwordResetEmailSentID string, sentAt time
 	}
 }
 
-func NewPasswordResetCompletedEvent(passwordResetCompletedID string, resetAt time.Time, passwordResetRequestedID, userRegisteredID string, metadata map[string]any) eventstore.DomainEvent {
+func NewPasswordResetCompletedEvent(passwordResetCompletedID string, resetAt time.Time, passwordResetRequestedID, userRegisteredID, passwordHash string, metadata map[string]any) eventstore.DomainEvent {
 	return eventstore.DomainEvent{
 		EventID:   passwordResetCompletedID,
 		EventType: PasswordResetCompleted,
 		Data: eventstore.MustData(PasswordResetCompletedEvent{
 			PasswordResetCompletedID: passwordResetCompletedID,
 			ResetAt:                  formatEventTime(resetAt),
+			PasswordHash:             passwordHash,
 			Scope: PasswordResetCompletedScope{
 				PasswordResetRequestedID: passwordResetRequestedID,
 				UserRegisteredID:         userRegisteredID,
@@ -252,13 +260,14 @@ func NewPasswordResetCompletedEvent(passwordResetCompletedID string, resetAt tim
 	}
 }
 
-func NewPasswordChangedEvent(passwordChangedID string, changedAt time.Time, userRegisteredID string, metadata map[string]any) eventstore.DomainEvent {
+func NewPasswordChangedEvent(passwordChangedID string, changedAt time.Time, userRegisteredID, passwordHash string, metadata map[string]any) eventstore.DomainEvent {
 	return eventstore.DomainEvent{
 		EventID:   passwordChangedID,
 		EventType: PasswordChanged,
 		Data: eventstore.MustData(PasswordChangedEvent{
 			PasswordChangedID: passwordChangedID,
 			ChangedAt:         formatEventTime(changedAt),
+			PasswordHash:      passwordHash,
 			Scope:             UserRegisteredScope{UserRegisteredID: userRegisteredID},
 		}),
 		Metadata: metadata,

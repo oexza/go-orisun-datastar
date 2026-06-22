@@ -28,7 +28,3 @@ func streamQuery(todoID, userRegisteredID string) eventstore.Query {
 	}
 	return eventstore.Query{Criteria: criteria}
 }
-
-func metadataWithQuery(metadata CommandMetadata, query eventstore.Query) map[string]any {
-	return eventstore.MergeMetadata(map[string]any{"query": eventstore.MustJSON(query)}, metadata)
-}

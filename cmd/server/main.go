@@ -33,9 +33,9 @@ type runOptions struct {
 }
 
 type appComponents struct {
-	accountCommands  *auth.AccountCommands
 	sessionManager   *auth.SessionManager
 	authUsers        *auth.AuthUserStore
+	verifications    *auth.VerificationStore
 	todoReadModel    *todo.ReadModel
 	profileReadModel *profile.ReadModel
 	checkpointer     eventstore.Checkpointer
@@ -112,16 +112,18 @@ func run(ctx context.Context, stop context.CancelFunc, cfg config.Config, opts r
 	defer stopEventHandlers(handlers)
 
 	app := httpui.Server{
-		Accounts:       components.accountCommands,
-		Sessions:       components.sessionManager,
-		AuthUsers:      components.authUsers,
-		Todos:          components.todoReadModel,
-		EventSaver:     orisunStore,
-		EventRetriever: orisunStore,
-		ProfileStorage: components.profileStorage,
-		Subscriber:     bus,
-		ViewStore:      viewStore,
-		Development:    cfg.DevelopmentCookie,
+		Sessions:            components.sessionManager,
+		AuthUsers:           components.authUsers,
+		PasswordCredentials: components.authUsers,
+		Verifications:       components.verifications,
+		Todos:               components.todoReadModel,
+		Profiles:            components.profileReadModel,
+		EventSaver:          orisunStore,
+		EventRetriever:      orisunStore,
+		ProfileStorage:      components.profileStorage,
+		Subscriber:          bus,
+		ViewStore:           viewStore,
+		Development:         cfg.DevelopmentCookie,
 	}
 	return serveHTTP(ctx, stop, cfg.Port, app.Routes(), logger)
 }
@@ -159,16 +161,16 @@ func newViewStore(bus *natsbus.Bus, logger *slog.Logger) viewstore.Store {
 
 func newAppComponents(db *pgxpool.Pool, store *eventstore.EmbeddedOrisun, cfg config.Config, logger *slog.Logger) appComponents {
 	authUsers := auth.NewAuthUserStore(db)
-	accountCommands := auth.NewAccountCommands(db, authUsers, store, store)
 	sessionManager := auth.NewSessionManager(db, authUsers, !cfg.DevelopmentCookie)
+	verifications := auth.NewVerificationStore(db)
 	todoReadModel := todo.NewReadModel(db)
 	profileReadModel := profile.NewReadModel(db)
 	profileStorage := storage.NewLocalProvider(cfg.UploadDir, cfg.UploadBaseURL)
 
 	return appComponents{
-		accountCommands:  accountCommands,
 		sessionManager:   sessionManager,
 		authUsers:        authUsers,
+		verifications:    verifications,
 		todoReadModel:    todoReadModel,
 		profileReadModel: profileReadModel,
 		checkpointer:     eventstore.NewPostgresCheckpointer(db),
@@ -182,7 +184,7 @@ func eventHandlerFactories(store *eventstore.EmbeddedOrisun, bus *natsbus.Bus, c
 		{
 			name: "registration OTP",
 			create: func() (eventHandler, error) {
-				return auth.NewRegistrationOTPToBeGeneratedEventHandler(store, components.checkpointer, components.accountCommands, logger)
+				return auth.NewRegistrationOTPToBeGeneratedEventHandler(store, components.checkpointer, store, store, logger)
 			},
 		},
 		{
@@ -200,19 +202,19 @@ func eventHandlerFactories(store *eventstore.EmbeddedOrisun, bus *natsbus.Bus, c
 		{
 			name: "auth user projection",
 			create: func() (eventHandler, error) {
-				return auth.NewAuthUserProjectionEventHandler(store, components.checkpointer, store, components.authUsers, logger)
+				return auth.NewAuthUserProjectionEventHandler(store, components.checkpointer, store, components.authUsers, components.verifications, logger)
 			},
 		},
 		{
 			name: "profile read model",
 			create: func() (eventHandler, error) {
-				return profile.NewReadModelEventHandler(store, components.checkpointer, components.profileReadModel, logger)
+				return profile.NewReadModelEventHandler(store, components.checkpointer, components.profileReadModel, bus, logger)
 			},
 		},
 		{
 			name: "profile image auth user bridge",
 			create: func() (eventHandler, error) {
-				return profile.NewProfileImageUploadedAuthUserEventHandler(store, components.checkpointer, components.authUsers, logger)
+				return profile.NewProfileImageUploadedAuthUserEventHandler(store, components.checkpointer, components.authUsers, bus, logger)
 			},
 		},
 		{

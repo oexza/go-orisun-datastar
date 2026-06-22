@@ -8,14 +8,35 @@ import (
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
 	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
 	"github.com/oexza/go-orisun-datastar/internal/views"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type ChangePasswordCommand struct {
-	User     views.User
-	Metadata CommandMetadata
+	User            views.User
+	CurrentPassword string
+	NewPassword     string
+	Metadata        CommandMetadata
 }
 
-func ChangePasswordCommandHandler(ctx context.Context, command ChangePasswordCommand, saver eventstore.Saver, retriever eventstore.Retriever) error {
+type PasswordCredentialReader interface {
+	UserByEmailWithPassword(ctx context.Context, emailAddress string) (views.User, string, error)
+}
+
+func ChangePasswordCommandHandler(ctx context.Context, command ChangePasswordCommand, credentials PasswordCredentialReader, saver eventstore.Saver, retriever eventstore.Retriever) error {
+	if len(command.NewPassword) < 6 {
+		return errors.New("password must be at least 6 characters")
+	}
+	_, currentHash, err := credentials.UserByEmailWithPassword(ctx, command.User.Email)
+	if err != nil {
+		return err
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(currentHash), []byte(command.CurrentPassword)); err != nil {
+		return errors.New("current password is incorrect")
+	}
+	newHash, err := bcrypt.GenerateFromPassword([]byte(command.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
 	model, err := loadChangePasswordContext(ctx, command, retriever)
 	if err != nil {
 		return err
@@ -25,8 +46,8 @@ func ChangePasswordCommandHandler(ctx context.Context, command ChangePasswordCom
 	}
 
 	eventID := uuidv7.NewString()
-	event := NewPasswordChangedEvent(eventID, time.Now(), command.User.UserRegisteredID, metadataWithQuery(command.Metadata, model.query))
-	_, err = saver.SaveEvents(ctx, []eventstore.DomainEvent{event}, model.position, model.events, model.query)
+	event := NewPasswordChangedEvent(eventID, time.Now(), command.User.UserRegisteredID, string(newHash), nil)
+	_, err = eventstore.SaveCommandEvents(ctx, saver, command.Metadata, []eventstore.DomainEvent{event}, model.position, model.events, model.query)
 	return err
 }
 

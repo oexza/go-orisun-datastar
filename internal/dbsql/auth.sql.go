@@ -163,6 +163,28 @@ func (q *Queries) UpdateAuthAccountPassword(ctx context.Context, arg UpdateAuthA
 	return err
 }
 
+const updateAuthAccountPasswordByRegisteredID = `-- name: UpdateAuthAccountPasswordByRegisteredID :exec
+UPDATE auth_account
+SET password = $1,
+    updated_at = now()
+WHERE user_id = (
+    SELECT id
+    FROM auth_user
+    WHERE user_registered_id = $2
+)
+  AND provider_id = 'credential'
+`
+
+type UpdateAuthAccountPasswordByRegisteredIDParams struct {
+	Password         *string `json:"password"`
+	UserRegisteredID string  `json:"user_registered_id"`
+}
+
+func (q *Queries) UpdateAuthAccountPasswordByRegisteredID(ctx context.Context, arg UpdateAuthAccountPasswordByRegisteredIDParams) error {
+	_, err := q.db.Exec(ctx, updateAuthAccountPasswordByRegisteredID, arg.Password, arg.UserRegisteredID)
+	return err
+}
+
 const updateAuthUserImage = `-- name: UpdateAuthUserImage :exec
 UPDATE auth_user
 SET image = $1,
@@ -194,6 +216,23 @@ type UpdateAuthUserNameParams struct {
 
 func (q *Queries) UpdateAuthUserName(ctx context.Context, arg UpdateAuthUserNameParams) error {
 	_, err := q.db.Exec(ctx, updateAuthUserName, arg.Name, arg.ID)
+	return err
+}
+
+const updateAuthUserNameByRegisteredID = `-- name: UpdateAuthUserNameByRegisteredID :exec
+UPDATE auth_user
+SET name = $1,
+    updated_at = now()
+WHERE user_registered_id = $2
+`
+
+type UpdateAuthUserNameByRegisteredIDParams struct {
+	Name             string `json:"name"`
+	UserRegisteredID string `json:"user_registered_id"`
+}
+
+func (q *Queries) UpdateAuthUserNameByRegisteredID(ctx context.Context, arg UpdateAuthUserNameByRegisteredIDParams) error {
+	_, err := q.db.Exec(ctx, updateAuthUserNameByRegisteredID, arg.Name, arg.UserRegisteredID)
 	return err
 }
 

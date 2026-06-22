@@ -8,7 +8,7 @@ import (
 func TestPasswordResetCompletedEventMatchesFrasesShape(t *testing.T) {
 	resetAt := time.Date(2026, 6, 5, 12, 0, 0, 0, time.UTC)
 
-	event := NewPasswordResetCompletedEvent("completed-id", resetAt, "request-id", "user-id", nil)
+	event := NewPasswordResetCompletedEvent("completed-id", resetAt, "request-id", "user-id", "hash", nil)
 
 	if event.EventID != "completed-id" {
 		t.Fatalf("event id = %q, want completed-id", event.EventID)
@@ -21,6 +21,9 @@ func TestPasswordResetCompletedEventMatchesFrasesShape(t *testing.T) {
 	}
 	if event.Data["resetAt"] != resetAt.Format(time.RFC3339) {
 		t.Fatalf("resetAt = %v, want %s", event.Data["resetAt"], resetAt.Format(time.RFC3339))
+	}
+	if event.Data["passwordHash"] != "hash" {
+		t.Fatalf("passwordHash = %v, want hash", event.Data["passwordHash"])
 	}
 
 	scope, ok := event.Data["scope"].(map[string]any)
@@ -38,7 +41,7 @@ func TestPasswordResetCompletedEventMatchesFrasesShape(t *testing.T) {
 func TestEventSpecificIDMatchesEventID(t *testing.T) {
 	changedAt := time.Date(2026, 6, 5, 12, 0, 0, 0, time.UTC)
 
-	passwordChanged := NewPasswordChangedEvent("password-changed-id", changedAt, "user-id", nil)
+	passwordChanged := NewPasswordChangedEvent("password-changed-id", changedAt, "user-id", "hash", nil)
 	if passwordChanged.EventID != passwordChanged.Data["passwordChangedId"] {
 		t.Fatalf("password changed event id = %q, passwordChangedId = %v", passwordChanged.EventID, passwordChanged.Data["passwordChangedId"])
 	}

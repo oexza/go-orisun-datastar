@@ -25,9 +25,9 @@ func CreateTodoCommandHandler(ctx context.Context, command CreateTodoCommand, sa
 		return CreateTodoResult{}, err
 	}
 
-	event := NewTodoCreatedEvent(model.todoID, command.UserRegisteredID, model.title, time.Now(), metadataWithQuery(command.Metadata, model.query))
+	event := NewTodoCreatedEvent(model.todoID, command.UserRegisteredID, model.title, time.Now(), nil)
 
-	if _, err := saver.SaveEvents(ctx, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, model.query); err != nil {
+	if _, err := eventstore.SaveCommandEvents(ctx, saver, command.Metadata, []eventstore.DomainEvent{event}, eventstore.NoEventPosition, nil, model.query); err != nil {
 		return CreateTodoResult{}, err
 	}
 	return CreateTodoResult{TodoID: model.todoID}, nil

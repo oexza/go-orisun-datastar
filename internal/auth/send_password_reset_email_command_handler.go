@@ -63,8 +63,8 @@ func SendPasswordResetEmailCommandHandler(ctx context.Context, command SendPassw
 	}
 
 	id := uuidv7.NewString()
-	sent := NewPasswordResetEmailSentEvent(id, time.Now(), command.PasswordResetRequestedID, metadataWithQuery(command.Metadata, model.query))
-	_, err = saver.SaveEvents(ctx, []eventstore.DomainEvent{sent}, model.position, model.events, model.query)
+	sent := NewPasswordResetEmailSentEvent(id, time.Now(), command.PasswordResetRequestedID, nil)
+	_, err = eventstore.SaveCommandEvents(ctx, saver, command.Metadata, []eventstore.DomainEvent{sent}, model.position, model.events, model.query)
 	return err
 }
 

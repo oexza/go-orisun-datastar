@@ -7,11 +7,13 @@ import (
 
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
 	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type RegisterUserCommand struct {
 	Username    string
 	Email       string
+	Password    string
 	FirstName   string
 	LastName    string
 	YearOfBirth int
@@ -24,9 +26,13 @@ type RegisterUserResult struct {
 	Email            string
 	FirstName        string
 	LastName         string
+	PasswordHash     string
 }
 
 func RegisterUserCommandHandler(ctx context.Context, command RegisterUserCommand, saver eventstore.Saver, retriever eventstore.Retriever) (RegisterUserResult, error) {
+	if len(command.Password) < 6 {
+		return RegisterUserResult{}, errors.New("invalid registration input")
+	}
 	model, err := loadRegisterUserContext(ctx, command, retriever)
 	if err != nil {
 		return RegisterUserResult{}, err
@@ -34,9 +40,13 @@ func RegisterUserCommandHandler(ctx context.Context, command RegisterUserCommand
 	if model.existingUsername || model.existingEmail {
 		return RegisterUserResult{}, errors.New("user already exists")
 	}
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(command.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return RegisterUserResult{}, err
+	}
 
-	event := NewUserRegisteredEvent(model.userRegisteredID, model.username, model.email, model.firstName, model.lastName, command.YearOfBirth, metadataWithQuery(command.Metadata, model.query))
-	if _, err := saver.SaveEvents(ctx, []eventstore.DomainEvent{event}, model.position, model.events, model.query); err != nil {
+	event := NewUserRegisteredEvent(model.userRegisteredID, model.username, model.email, model.firstName, model.lastName, command.YearOfBirth, string(passwordHash), nil)
+	if _, err := eventstore.SaveCommandEvents(ctx, saver, command.Metadata, []eventstore.DomainEvent{event}, model.position, model.events, model.query); err != nil {
 		return RegisterUserResult{}, err
 	}
 	return RegisterUserResult{
@@ -45,6 +55,7 @@ func RegisterUserCommandHandler(ctx context.Context, command RegisterUserCommand
 		Email:            model.email,
 		FirstName:        model.firstName,
 		LastName:         model.lastName,
+		PasswordHash:     string(passwordHash),
 	}, nil
 }
 

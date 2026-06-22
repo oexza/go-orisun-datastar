@@ -89,3 +89,7 @@ func NewProfileHeaderImageUploadedEvent(profileHeaderImageUploadedID, imageURL s
 		Metadata: metadata,
 	}
 }
+
+func Channel(userRegisteredID string) string {
+	return "profile." + userRegisteredID
+}
