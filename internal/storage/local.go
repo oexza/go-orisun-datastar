@@ -12,6 +12,8 @@ import (
 type Provider interface {
 	PutObject(ctx context.Context, key string, data []byte, contentType string) error
 	PublicURL(key string) string
+	DeleteObject(ctx context.Context, key string) error
+	ObjectKeyFromPublicURL(url string) (string, bool)
 }
 
 type LocalProvider struct {
@@ -49,6 +51,35 @@ func (p LocalProvider) PublicURL(key string) string {
 		return p.baseURL
 	}
 	return p.baseURL + "/" + cleanKey
+}
+
+func (p LocalProvider) DeleteObject(ctx context.Context, key string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	cleanKey, err := cleanObjectKey(key)
+	if err != nil {
+		return err
+	}
+	err = os.Remove(filepath.Join(p.rootDir, filepath.FromSlash(cleanKey)))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
+}
+
+func (p LocalProvider) ObjectKeyFromPublicURL(url string) (string, bool) {
+	normalized := strings.SplitN(url, "?", 2)[0]
+	prefix := strings.TrimRight(p.baseURL, "/") + "/"
+	if !strings.HasPrefix(normalized, prefix) {
+		return "", false
+	}
+	key := strings.TrimPrefix(normalized, prefix)
+	cleanKey, err := cleanObjectKey(key)
+	if err != nil {
+		return "", false
+	}
+	return cleanKey, true
 }
 
 func cleanObjectKey(key string) (string, error) {

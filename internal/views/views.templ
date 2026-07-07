@@ -91,59 +91,60 @@ templ TodosPage(user User, todos []Todo) {
 				<button class="btn btn-primary" type="submit">Add</button>
 				@SseIndicator("creatingTodo")
 			</form>
-			<section id="todo-workspace" data-init={ longRunningGetSSE("/todos/stream") }>
-				@TodoWorkspace(todos)
-			</section>
+			<div data-init={ longRunningGetSSE("/todos/stream") }></div>
+			@TodoWorkspace(todos)
 		</main>
 	}
 }
 
 templ TodoWorkspace(todos []Todo) {
 	{{ stats := todoStats(todos) }}
-	<section class="todo-summary" aria-label="Todo summary">
-		<div class="todo-metric">
-			<span>Total</span>
-			<strong>{ todoCountLabel(stats.Total) }</strong>
-		</div>
-		<div class="todo-metric">
-			<span>Active</span>
-			<strong>{ todoCountLabel(stats.Active) }</strong>
-		</div>
-		<div class="todo-metric">
-			<span>Done</span>
-			<strong>{ todoCountLabel(stats.Completed) }</strong>
-		</div>
-		<div class="todo-progress" aria-label="Completion progress">
-			<div>
-				<span>Progress</span>
-				<strong>{ todoCompletionLabel(stats) }</strong>
+	<section id="todo-workspace">
+		<section class="todo-summary" aria-label="Todo summary">
+			<div class="todo-metric">
+				<span>Total</span>
+				<strong>{ todoCountLabel(stats.Total) }</strong>
 			</div>
-			<div class="todo-progress-track">
-				<div class="todo-progress-bar" style={ todoProgressStyle(stats) }></div>
+			<div class="todo-metric">
+				<span>Active</span>
+				<strong>{ todoCountLabel(stats.Active) }</strong>
 			</div>
-		</div>
+			<div class="todo-metric">
+				<span>Done</span>
+				<strong>{ todoCountLabel(stats.Completed) }</strong>
+			</div>
+			<div class="todo-progress" aria-label="Completion progress">
+				<div>
+					<span>Progress</span>
+					<strong>{ todoCompletionLabel(stats) }</strong>
+				</div>
+				<div class="todo-progress-track">
+					<div class="todo-progress-bar" style={ todoProgressStyle(stats) }></div>
+				</div>
+			</div>
+		</section>
+		<section class="todo-toolbar" aria-label="Todo bulk actions">
+			if stats.Active > 0 {
+				<form data-on:submit={ todoCompleteActiveSSE() }>
+					<button class="btn btn-sm btn-outline" type="submit">Complete active</button>
+				</form>
+			} else {
+				<button class="btn btn-sm btn-outline btn-disabled" type="button">Complete active</button>
+			}
+			if stats.Completed > 0 {
+				<form data-on:submit={ todoReopenCompletedSSE() }>
+					<button class="btn btn-sm btn-outline" type="submit">Reopen done</button>
+				</form>
+				<form data-on:submit={ todoClearCompletedSSE() }>
+					<button class="btn btn-sm btn-ghost text-error" type="submit">Clear done</button>
+				</form>
+			} else {
+				<button class="btn btn-sm btn-outline btn-disabled" type="button">Reopen done</button>
+				<button class="btn btn-sm btn-ghost btn-disabled" type="button">Clear done</button>
+			}
+		</section>
+		@TodoList(todos)
 	</section>
-	<section class="todo-toolbar" aria-label="Todo bulk actions">
-		if stats.Active > 0 {
-			<form data-on:submit={ todoCompleteActiveSSE() }>
-				<button class="btn btn-sm btn-outline" type="submit">Complete active</button>
-			</form>
-		} else {
-			<button class="btn btn-sm btn-outline btn-disabled" type="button">Complete active</button>
-		}
-		if stats.Completed > 0 {
-			<form data-on:submit={ todoReopenCompletedSSE() }>
-				<button class="btn btn-sm btn-outline" type="submit">Reopen done</button>
-			</form>
-			<form data-on:submit={ todoClearCompletedSSE() }>
-				<button class="btn btn-sm btn-ghost text-error" type="submit">Clear done</button>
-			</form>
-		} else {
-			<button class="btn btn-sm btn-outline btn-disabled" type="button">Reopen done</button>
-			<button class="btn btn-sm btn-ghost btn-disabled" type="button">Clear done</button>
-		}
-	</section>
-	@TodoList(todos)
 }
 
 templ TodoList(todos []Todo) {
@@ -194,15 +195,14 @@ templ Profile(user User) {
 	@Base("Profile") {
 		<main class="page">
 			@AppNav(user, "profile")
-			<section id="profile-panel" data-init={ longRunningGetSSE("/profile/stream") }>
-				@ProfilePanel(user)
-			</section>
+			<div data-init={ longRunningGetSSE("/profile/stream") }></div>
+			@ProfilePanel(user)
 		</main>
 	}
 }
 
 templ ProfilePanel(user User) {
-	<section class="profile-hero">
+	<section id="profile-panel" class="profile-hero">
 		if user.HeaderImageURL != "" {
 			<div class="profile-cover" style={ "background-image: linear-gradient(180deg, transparent, color-mix(in oklab, var(--color-neutral) 28%, transparent)), url('" + user.HeaderImageURL + "')" }></div>
 		} else {
@@ -227,6 +227,73 @@ templ ProfilePanel(user User) {
 				<a class="btn btn-primary" href="/profile/edit">Edit profile</a>
 			</div>
 		</div>
+	</section>
+}
+
+templ OpsDashboard(snapshot OpsDashboardSnapshot) {
+	@Base("Ops") {
+		<main class="page">
+			<section class="page-header">
+				<h1 class="page-title">Ops</h1>
+				<p class="page-subtitle">Event handler status and projection checkpoint health.</p>
+			</section>
+			<div data-init={ longRunningGetSSE("/ops/stream") }></div>
+			@OpsMetrics(snapshot)
+		</main>
+	}
+}
+
+templ OpsMetrics(snapshot OpsDashboardSnapshot) {
+	<section id="ops-metrics">
+		if len(snapshot.Handlers) == 0 {
+			<div class="empty">
+				<h2>No event handlers seen yet</h2>
+				<p>Start the app and handler metrics will appear here.</p>
+			</div>
+		} else {
+			<div class="overflow-x-auto">
+				<table class="table table-zebra">
+					<thead>
+						<tr>
+							<th>Handler</th>
+							<th>Status</th>
+							<th>Last event</th>
+							<th>Checkpoint</th>
+							<th>Processed</th>
+							<th>Failures</th>
+							<th>Updated</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, handler := range snapshot.Handlers {
+							<tr>
+								<td>
+									<div class="font-semibold">{ handler.Name }</div>
+									if handler.LastError != "" {
+										<div class="text-error text-sm">{ handler.LastError }</div>
+									}
+								</td>
+								<td>
+									if handler.Running {
+										<span class="badge badge-success">Running</span>
+									} else {
+										<span class="badge badge-outline">Stopped</span>
+									}
+								</td>
+								<td>
+									<div>{ handler.LastEventType }</div>
+									<div class="text-xs opacity-60">{ handler.LastEventID }</div>
+								</td>
+								<td>{ int64Label(handler.LastCheckpointCommit) }</td>
+								<td>{ int64Label(handler.ProcessedCount) }</td>
+								<td>{ int64Label(handler.FailureCount) }</td>
+								<td>{ handler.UpdatedAt }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
 	</section>
 }
 

@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
+	"github.com/oexza/go-orisun-datastar/internal/protectedpii"
 )
 
 const (
@@ -21,13 +22,16 @@ const (
 const (
 	UserRegisteredIDField                     = "userRegisteredId"
 	UserRegisteredUsernameField               = "username"
+	UserRegisteredUsernameHashField           = "usernameHash"
 	UserRegisteredEmailField                  = "email"
+	UserRegisteredEmailHashField              = "emailHash"
 	UserRegisteredFirstNameField              = "firstName"
 	UserRegisteredLastNameField               = "lastName"
 	UserRegisteredYearOfBirthField            = "yearOfBirth"
 	UserRegisteredPasswordHashField           = "passwordHash"
 	UserNameChangedIDField                    = "userNameChangedId"
 	UserNameChangedNameField                  = "name"
+	UserNameChangedNameHashField              = "nameHash"
 	UserNameChangedChangedAtField             = "changedAt"
 	EmailVerificationOTPGeneratedIDField      = "emailVerificationOTPGeneratedId"
 	EmailVerificationOTPCodeField             = "otpCode"
@@ -38,7 +42,9 @@ const (
 	EmailVerificationOTPSentAtField           = "sentAt"
 	PasswordResetRequestedIDField             = "passwordResetRequestedId"
 	PasswordResetRequestedEmailField          = "email"
+	PasswordResetRequestedEmailHashField      = "emailHash"
 	PasswordResetRequestedTokenField          = "resetToken"
+	PasswordResetRequestedTokenHashField      = "resetTokenHash"
 	PasswordResetRequestedExpiresAtField      = "expiresAt"
 	PasswordResetEmailSentIDField             = "passwordResetEmailSentId"
 	PasswordResetEmailSentAtField             = "sentAt"
@@ -51,22 +57,36 @@ const (
 	ScopeUserRegisteredIDField                = "scope.userRegisteredId"
 	ScopeEmailVerificationOTPGeneratedIDField = "scope.emailVerificationOTPGeneratedId"
 	ScopePasswordResetRequestedIDField        = "scope.passwordResetRequestedId"
+	AccountDeletionRequested                  = "AccountDeletionRequested"
+	AccountDeleted                            = "AccountDeleted"
+	AccountDeletionRequestedIDField           = "accountDeletionRequestedId"
+	AccountDeletedIDField                     = "accountDeletedId"
+	AccountDeletionRequestedAtField           = "requestedAt"
+	AccountDeletedAtField                     = "deletedAt"
+	LoginAttemptRecorded                      = "LoginAttemptRecorded"
+	LoginAttemptRecordedIDField               = "loginAttemptRecordedId"
+	LoginAttemptIdentifierHashField           = "attemptedIdentifierHash"
+	LoginAttemptIPAddressHashField            = "ipAddressHash"
+	LoginAttemptUserRegisteredIDField         = "userRegisteredId"
 )
 
 type UserRegisteredEvent struct {
-	UserRegisteredID string         `json:"userRegisteredId"`
-	Username         string         `json:"username"`
-	Email            string         `json:"email"`
-	FirstName        string         `json:"firstName"`
-	LastName         string         `json:"lastName"`
-	YearOfBirth      int            `json:"yearOfBirth"`
-	PasswordHash     string         `json:"passwordHash"`
-	Scope            map[string]any `json:"scope"`
+	UserRegisteredID string             `json:"userRegisteredId"`
+	Username         protectedpii.Value `json:"username"`
+	UsernameHash     string             `json:"usernameHash"`
+	Email            protectedpii.Value `json:"email"`
+	EmailHash        string             `json:"emailHash"`
+	FirstName        protectedpii.Value `json:"firstName"`
+	LastName         protectedpii.Value `json:"lastName"`
+	YearOfBirth      int                `json:"yearOfBirth"`
+	PasswordHash     string             `json:"passwordHash"`
+	Scope            map[string]any     `json:"scope"`
 }
 
 type UserNameChangedEvent struct {
 	UserNameChangedID string              `json:"userNameChangedId"`
-	Name              string              `json:"name"`
+	Name              protectedpii.Value  `json:"name"`
+	NameHash          string              `json:"nameHash"`
 	ChangedAt         string              `json:"changedAt"`
 	Scope             UserRegisteredScope `json:"scope"`
 }
@@ -92,8 +112,10 @@ type EmailVerificationOTPSentEvent struct {
 
 type PasswordResetRequestedEvent struct {
 	PasswordResetRequestedID string              `json:"passwordResetRequestedId"`
-	Email                    string              `json:"email"`
-	ResetToken               string              `json:"resetToken"`
+	Email                    protectedpii.Value  `json:"email"`
+	EmailHash                string              `json:"emailHash"`
+	ResetToken               protectedpii.Value  `json:"resetToken"`
+	ResetTokenHash           string              `json:"resetTokenHash"`
 	ExpiresAt                string              `json:"expiresAt"`
 	Scope                    UserRegisteredScope `json:"scope"`
 }
@@ -118,6 +140,32 @@ type PasswordChangedEvent struct {
 	Scope             UserRegisteredScope `json:"scope"`
 }
 
+type AccountDeletionRequestedEvent struct {
+	AccountDeletionRequestedID string              `json:"accountDeletionRequestedId"`
+	RequestedAt                string              `json:"requestedAt"`
+	AuthUserID                 string              `json:"authUserId"`
+	Scope                      UserRegisteredScope `json:"scope"`
+}
+
+type AccountDeletedEvent struct {
+	AccountDeletedID           string               `json:"accountDeletedId"`
+	DeletedAt                  string               `json:"deletedAt"`
+	AccountDeletionRequestedID string               `json:"accountDeletionRequestedId"`
+	AuthUserID                 string               `json:"authUserId"`
+	Scope                      AccountDeletionScope `json:"scope"`
+}
+
+type LoginAttemptRecordedEvent struct {
+	LoginAttemptRecordedID  string             `json:"loginAttemptRecordedId"`
+	AttemptedIdentifier     protectedpii.Value `json:"attemptedIdentifier"`
+	AttemptedIdentifierHash string             `json:"attemptedIdentifierHash"`
+	IPAddress               protectedpii.Value `json:"ipAddress"`
+	IPAddressHash           string             `json:"ipAddressHash"`
+	UserRegisteredID        string             `json:"userRegisteredId,omitempty"`
+	Succeeded               bool               `json:"succeeded"`
+	RecordedAt              string             `json:"recordedAt"`
+}
+
 type UserRegisteredScope struct {
 	UserRegisteredID string `json:"userRegisteredId"`
 }
@@ -140,16 +188,24 @@ type PasswordResetCompletedScope struct {
 	UserRegisteredID         string `json:"userRegisteredId"`
 }
 
-func NewUserRegisteredEvent(userRegisteredID, username, emailAddress, firstName, lastName string, yearOfBirth int, passwordHash string, metadata map[string]any) eventstore.DomainEvent {
+type AccountDeletionScope struct {
+	AccountDeletionRequestedID string `json:"accountDeletionRequestedId"`
+	UserRegisteredID           string `json:"userRegisteredId"`
+}
+
+func NewUserRegisteredEvent(userRegisteredID, username, emailAddress, firstName, lastName string, yearOfBirth int, passwordHash string, subjectKey protectedpii.SubjectDataKey, metadata map[string]any) eventstore.DomainEvent {
+	protector := protectedpii.FromEnv()
 	return eventstore.DomainEvent{
 		EventID:   userRegisteredID,
 		EventType: UserRegistered,
 		Data: eventstore.MustData(UserRegisteredEvent{
 			UserRegisteredID: userRegisteredID,
-			Username:         username,
-			Email:            emailAddress,
-			FirstName:        firstName,
-			LastName:         lastName,
+			Username:         protector.MustProtectWithDataKey(username, UserRegisteredUsernameField, subjectKey),
+			UsernameHash:     protector.BlindIndex(UserRegisteredUsernameField, username),
+			Email:            protector.MustProtectWithDataKey(emailAddress, UserRegisteredEmailField, subjectKey),
+			EmailHash:        protector.BlindIndex(UserRegisteredEmailField, emailAddress),
+			FirstName:        protector.MustProtectWithDataKey(firstName, UserRegisteredFirstNameField, subjectKey),
+			LastName:         protector.MustProtectWithDataKey(lastName, UserRegisteredLastNameField, subjectKey),
 			YearOfBirth:      yearOfBirth,
 			PasswordHash:     passwordHash,
 			Scope:            map[string]any{},
@@ -158,13 +214,15 @@ func NewUserRegisteredEvent(userRegisteredID, username, emailAddress, firstName,
 	}
 }
 
-func NewUserNameChangedEvent(userNameChangedID, name string, changedAt time.Time, userRegisteredID string, metadata map[string]any) eventstore.DomainEvent {
+func NewUserNameChangedEvent(userNameChangedID, name string, changedAt time.Time, userRegisteredID string, subjectKey protectedpii.SubjectDataKey, metadata map[string]any) eventstore.DomainEvent {
+	protector := protectedpii.FromEnv()
 	return eventstore.DomainEvent{
 		EventID:   userNameChangedID,
 		EventType: UserNameChanged,
 		Data: eventstore.MustData(UserNameChangedEvent{
 			UserNameChangedID: userNameChangedID,
-			Name:              name,
+			Name:              protector.MustProtectWithDataKey(name, UserNameChangedNameField, subjectKey),
+			NameHash:          protector.BlindIndex(UserNameChangedNameField, name),
 			ChangedAt:         formatEventTime(changedAt),
 			Scope:             UserRegisteredScope{UserRegisteredID: userRegisteredID},
 		}),
@@ -215,14 +273,17 @@ func NewEmailVerificationOTPSentEvent(emailVerificationOTPSentID string, sentAt 
 	}
 }
 
-func NewPasswordResetRequestedEvent(passwordResetRequestedID, emailAddress, resetToken string, expiresAt time.Time, userRegisteredID string, metadata map[string]any) eventstore.DomainEvent {
+func NewPasswordResetRequestedEvent(passwordResetRequestedID, emailAddress, resetToken string, expiresAt time.Time, userRegisteredID string, subjectKey protectedpii.SubjectDataKey, metadata map[string]any) eventstore.DomainEvent {
+	protector := protectedpii.FromEnv()
 	return eventstore.DomainEvent{
 		EventID:   passwordResetRequestedID,
 		EventType: PasswordResetRequested,
 		Data: eventstore.MustData(PasswordResetRequestedEvent{
 			PasswordResetRequestedID: passwordResetRequestedID,
-			Email:                    emailAddress,
-			ResetToken:               resetToken,
+			Email:                    protector.MustProtectWithDataKey(emailAddress, PasswordResetRequestedEmailField, subjectKey),
+			EmailHash:                protector.BlindIndex(PasswordResetRequestedEmailField, emailAddress),
+			ResetToken:               protector.MustProtectWithDataKey(resetToken, PasswordResetRequestedTokenField, subjectKey),
+			ResetTokenHash:           protector.SensitiveBlindIndex(PasswordResetRequestedTokenField, resetToken),
 			ExpiresAt:                formatEventTime(expiresAt),
 			Scope:                    UserRegisteredScope{UserRegisteredID: userRegisteredID},
 		}),
@@ -269,6 +330,57 @@ func NewPasswordChangedEvent(passwordChangedID string, changedAt time.Time, user
 			ChangedAt:         formatEventTime(changedAt),
 			PasswordHash:      passwordHash,
 			Scope:             UserRegisteredScope{UserRegisteredID: userRegisteredID},
+		}),
+		Metadata: metadata,
+	}
+}
+
+func NewAccountDeletionRequestedEvent(accountDeletionRequestedID string, requestedAt time.Time, authUserID, userRegisteredID string, metadata map[string]any) eventstore.DomainEvent {
+	return eventstore.DomainEvent{
+		EventID:   accountDeletionRequestedID,
+		EventType: AccountDeletionRequested,
+		Data: eventstore.MustData(AccountDeletionRequestedEvent{
+			AccountDeletionRequestedID: accountDeletionRequestedID,
+			RequestedAt:                formatEventTime(requestedAt),
+			AuthUserID:                 authUserID,
+			Scope:                      UserRegisteredScope{UserRegisteredID: userRegisteredID},
+		}),
+		Metadata: metadata,
+	}
+}
+
+func NewAccountDeletedEvent(accountDeletedID string, deletedAt time.Time, accountDeletionRequestedID, authUserID, userRegisteredID string, metadata map[string]any) eventstore.DomainEvent {
+	return eventstore.DomainEvent{
+		EventID:   accountDeletedID,
+		EventType: AccountDeleted,
+		Data: eventstore.MustData(AccountDeletedEvent{
+			AccountDeletedID:           accountDeletedID,
+			DeletedAt:                  formatEventTime(deletedAt),
+			AccountDeletionRequestedID: accountDeletionRequestedID,
+			AuthUserID:                 authUserID,
+			Scope: AccountDeletionScope{
+				AccountDeletionRequestedID: accountDeletionRequestedID,
+				UserRegisteredID:           userRegisteredID,
+			},
+		}),
+		Metadata: metadata,
+	}
+}
+
+func NewLoginAttemptRecordedEvent(loginAttemptRecordedID string, recordedAt time.Time, attemptedIdentifier, ipAddress, userRegisteredID string, succeeded bool, metadata map[string]any) eventstore.DomainEvent {
+	protector := protectedpii.FromEnv()
+	return eventstore.DomainEvent{
+		EventID:   loginAttemptRecordedID,
+		EventType: LoginAttemptRecorded,
+		Data: eventstore.MustData(LoginAttemptRecordedEvent{
+			LoginAttemptRecordedID:  loginAttemptRecordedID,
+			AttemptedIdentifier:     protector.MustProtect(attemptedIdentifier),
+			AttemptedIdentifierHash: protector.BlindIndex("attemptedIdentifier", attemptedIdentifier),
+			IPAddress:               protector.MustProtect(ipAddress),
+			IPAddressHash:           protector.SensitiveBlindIndex("ipAddress", ipAddress),
+			UserRegisteredID:        userRegisteredID,
+			Succeeded:               succeeded,
+			RecordedAt:              formatEventTime(recordedAt),
 		}),
 		Metadata: metadata,
 	}

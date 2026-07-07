@@ -12,6 +12,8 @@ type Config struct {
 	OrisunSQLiteDir   string
 	OrisunBoundary    string
 	SessionSecret     string
+	PIIKeySecret      string
+	PIIBlindSecret    string
 	UploadDir         string
 	UploadBaseURL     string
 	DevelopmentCookie bool
@@ -23,10 +25,12 @@ func Load() Config {
 	return Config{
 		Port:              port,
 		AppURL:            env("APP_URL", "http://localhost:"+port),
-		SQLitePath:        env("SQLITE_PATH", "data/app.sqlite"),
-		OrisunSQLiteDir:   env("ORISUN_SQLITE_DIR", "data/orisun"),
+		SQLitePath:        env("SQLITE_PATH", "data/appdb.sqlite"),
+		OrisunSQLiteDir:   env("ORISUN_SQLITE_DIR", "data/app-orisun"),
 		OrisunBoundary:    env("ORISUN_GENERAL_BOUNDARY", "go_orisun_datastar"),
 		SessionSecret:     env("BETTER_AUTH_SECRET", "secret-key-that-should-be-very-secret"),
+		PIIKeySecret:      env("PII_KEY_ENCRYPTION_SECRET", "development-pii-key-encryption-secret-change-me"),
+		PIIBlindSecret:    env("PII_BLIND_INDEX_SECRET", "development-pii-blind-index-secret-change-me"),
 		UploadDir:         env("UPLOAD_DIR", "static/uploads"),
 		UploadBaseURL:     env("UPLOAD_BASE_URL", "/static/uploads"),
 		DevelopmentCookie: env("NODE_ENV", "development") != "production",

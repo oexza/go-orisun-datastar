@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
+	"github.com/oexza/go-orisun-datastar/internal/protectedpii"
 )
 
 const (
@@ -15,6 +16,7 @@ const (
 const (
 	ProfileBioUpdatedIDField          = "profileBioUpdatedId"
 	ProfileBioUpdatedBioField         = "bio"
+	ProfileBioUpdatedBioHashField     = "bioHash"
 	ProfileBioUpdatedAtField          = "updatedAt"
 	ProfileImageUploadedIDField       = "profileImageUploadedId"
 	ProfileHeaderImageUploadedIDField = "profileHeaderImageUploadedId"
@@ -24,10 +26,11 @@ const (
 )
 
 type ProfileBioUpdatedEvent struct {
-	ProfileBioUpdatedID string           `json:"profileBioUpdatedId"`
-	Bio                 string           `json:"bio"`
-	UpdatedAt           string           `json:"updatedAt"`
-	Scope               ProfileUserScope `json:"scope"`
+	ProfileBioUpdatedID string             `json:"profileBioUpdatedId"`
+	Bio                 protectedpii.Value `json:"bio"`
+	BioHash             string             `json:"bioHash"`
+	UpdatedAt           string             `json:"updatedAt"`
+	Scope               ProfileUserScope   `json:"scope"`
 }
 
 type ProfileImageUploadedEvent struct {
@@ -48,13 +51,15 @@ type ProfileUserScope struct {
 	UserRegisteredID string `json:"userRegisteredId"`
 }
 
-func NewProfileBioUpdatedEvent(profileBioUpdatedID, bio string, updatedAt time.Time, userRegisteredID string, metadata map[string]any) eventstore.DomainEvent {
+func NewProfileBioUpdatedEvent(profileBioUpdatedID, bio string, updatedAt time.Time, userRegisteredID string, subjectKey protectedpii.SubjectDataKey, metadata map[string]any) eventstore.DomainEvent {
+	protector := protectedpii.FromEnv()
 	return eventstore.DomainEvent{
 		EventID:   profileBioUpdatedID,
 		EventType: ProfileBioUpdated,
 		Data: eventstore.MustData(ProfileBioUpdatedEvent{
 			ProfileBioUpdatedID: profileBioUpdatedID,
-			Bio:                 bio,
+			Bio:                 protector.MustProtectWithDataKey(bio, ProfileBioUpdatedBioField, subjectKey),
+			BioHash:             protector.BlindIndex(ProfileBioUpdatedBioField, bio),
 			UpdatedAt:           updatedAt.Format(time.RFC3339),
 			Scope:               ProfileUserScope{UserRegisteredID: userRegisteredID},
 		}),

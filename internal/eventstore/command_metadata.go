@@ -29,22 +29,40 @@ func HTTPCommandMetadata(r *http.Request, userRegisteredID string) CommandMetada
 	if userRegisteredID != "" {
 		audit["actor"] = map[string]any{"userRegisteredId": userRegisteredID}
 	}
+	if requestLog := RequestLogMetadata(r.Context()); len(requestLog) > 0 {
+		audit["requestLog"] = requestLog
+	}
 	return CommandMetadata{"audit": audit}
 }
 
 func EventHandlerCommandMetadata(handlerName string, resolved ResolvedEvent) CommandMetadata {
-	return CommandMetadata{"audit": map[string]any{
-		"source":     "event-handler",
+	metadata := SystemCommandMetadata(handlerName, "event-handler")
+	audit, _ := metadata["audit"].(map[string]any)
+	audit["source"] = "event-handler"
+	audit["eventHandler"] = map[string]any{
+		"name": handlerName,
+	}
+	audit["reactedTo"] = map[string]any{
+		"eventId":   resolved.Event.EventID,
+		"eventType": resolved.Event.EventType,
+		"position":  resolved.Position,
+	}
+	return metadata
+}
+
+func SystemCommandMetadata(systemActor, action string) CommandMetadata {
+	audit := map[string]any{
+		"source":     "system",
 		"capturedAt": time.Now().UTC().Format(time.RFC3339),
-		"eventHandler": map[string]any{
-			"name": handlerName,
+		"actor": map[string]any{
+			"type": "system",
+			"id":   systemActor,
 		},
-		"reactedTo": map[string]any{
-			"eventId":   resolved.Event.EventID,
-			"eventType": resolved.Event.EventType,
-			"position":  resolved.Position,
-		},
-	}}
+	}
+	if action != "" {
+		audit["action"] = action
+	}
+	return CommandMetadata{"audit": audit}
 }
 
 func CommandMetadataWithQuery(commandMetadata CommandMetadata, query Query) CommandMetadata {

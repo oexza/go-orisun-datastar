@@ -6678,6 +6678,9 @@
   .gap-2 {
     gap: calc(var(--spacing) * 2);
   }
+  .overflow-x-auto {
+    overflow-x: auto;
+  }
   .timeline-box {
     @layer daisyui.l1.l2.l3 {
       border: var(--border) solid;
@@ -7677,6 +7680,10 @@
     font-size: var(--text-lg);
     line-height: var(--tw-leading, var(--text-lg--line-height));
   }
+  .text-sm {
+    font-size: var(--text-sm);
+    line-height: var(--tw-leading, var(--text-sm--line-height));
+  }
   .text-xs {
     font-size: var(--text-xs);
     line-height: var(--tw-leading, var(--text-xs--line-height));
@@ -8315,6 +8322,9 @@
   }
   .opacity-0 {
     opacity: 0%;
+  }
+  .opacity-60 {
+    opacity: 60%;
   }
   .opacity-100 {
     opacity: 100%;

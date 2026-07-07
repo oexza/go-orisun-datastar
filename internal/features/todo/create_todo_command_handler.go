@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/oexza/go-orisun-datastar/internal/commandlimits"
 	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
 
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
@@ -20,6 +21,9 @@ type CreateTodoResult struct {
 }
 
 func CreateTodoCommandHandler(ctx context.Context, command CreateTodoCommand, saver eventstore.Saver) (CreateTodoResult, error) {
+	if err := commandlimits.Assert(command); err != nil {
+		return CreateTodoResult{}, err
+	}
 	model, err := newCreateTodoContext(command)
 	if err != nil {
 		return CreateTodoResult{}, err

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/oexza/go-orisun-datastar/internal/auth"
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
 )
 
@@ -14,10 +15,11 @@ type ReadModelEventHandler struct {
 	global    *eventstore.GlobalEventHandler
 	readModel *ReadModel
 	publisher eventstore.Publisher
+	keys      auth.SubjectPiiKeyPort
 }
 
-func NewReadModelEventHandler(subscriber eventstore.Subscriber, checkpointer eventstore.Checkpointer, readModel *ReadModel, publisher eventstore.Publisher, logger *slog.Logger) (*ReadModelEventHandler, error) {
-	handler := &ReadModelEventHandler{readModel: readModel, publisher: publisher}
+func NewReadModelEventHandler(subscriber eventstore.Subscriber, checkpointer eventstore.Checkpointer, readModel *ReadModel, publisher eventstore.Publisher, keys auth.SubjectPiiKeyPort, logger *slog.Logger) (*ReadModelEventHandler, error) {
+	handler := &ReadModelEventHandler{readModel: readModel, publisher: publisher, keys: keys}
 	global, err := eventstore.NewGlobalEventHandler(eventstore.GlobalEventHandlerConfig{
 		Subscriber:      subscriber,
 		Checkpointer:    checkpointer,
@@ -47,17 +49,17 @@ func (h *ReadModelEventHandler) handle(ctx context.Context, resolved eventstore.
 	switch resolved.Event.EventType {
 	case userRegistered:
 		userRegisteredID, _ = resolved.Event.Data["userRegisteredId"].(string)
-		if err := h.readModel.UpsertRegisteredUser(ctx, resolved); err != nil {
+		if err := h.readModel.UpsertRegisteredUser(ctx, resolved, h.keys); err != nil {
 			return err
 		}
 	case userNameChanged:
 		userRegisteredID, _ = eventstore.Scope(resolved.Event.Data)["userRegisteredId"].(string)
-		if err := h.readModel.UpdateName(ctx, resolved); err != nil {
+		if err := h.readModel.UpdateName(ctx, resolved, h.keys); err != nil {
 			return err
 		}
 	case ProfileBioUpdated:
 		userRegisteredID, _ = eventstore.Scope(resolved.Event.Data)["userRegisteredId"].(string)
-		if err := h.readModel.UpdateBio(ctx, resolved); err != nil {
+		if err := h.readModel.UpdateBio(ctx, resolved, h.keys); err != nil {
 			return err
 		}
 	case ProfileImageUploaded:

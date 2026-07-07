@@ -24,7 +24,7 @@ func (s LogSender) Send(ctx context.Context, message Message) error {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	logger.InfoContext(ctx, "email message",
+	logger.Info("email message",
 		"to", message.To,
 		"title", message.Title,
 		"body", message.Body,

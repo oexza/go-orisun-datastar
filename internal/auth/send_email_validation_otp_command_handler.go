@@ -5,10 +5,12 @@ import (
 	"errors"
 	"time"
 
+	"github.com/oexza/go-orisun-datastar/internal/commandlimits"
 	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
 
 	"github.com/oexza/go-orisun-datastar/internal/email"
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
+	"github.com/oexza/go-orisun-datastar/internal/protectedpii"
 )
 
 type CommandMetadata = eventstore.CommandMetadata
@@ -24,13 +26,17 @@ type emailValidationOTPContext struct {
 	code        string
 	expiresAt   string
 	email       string
+	subjectKey  protectedpii.SubjectDataKey
 	alreadySent bool
 	position    eventstore.Position
 	events      []eventstore.ResolvedEvent
 	query       eventstore.Query
 }
 
-func SendEmailValidationOTPCommandHandler(ctx context.Context, command SendEmailValidationOTPCommand, saver eventstore.Saver, retriever eventstore.Retriever, sender EmailSender) error {
+func SendEmailValidationOTPCommandHandler(ctx context.Context, command SendEmailValidationOTPCommand, saver eventstore.Saver, retriever eventstore.Retriever, sender EmailSender, keys SubjectPiiKeyPort) error {
+	if err := commandlimits.Assert(command); err != nil {
+		return err
+	}
 	generatedQuery := emailVerificationOTPGeneratedQuery(command.EmailVerificationOTPGeneratedID)
 	userQuery := userRegisteredQuery(command.UserRegisteredID)
 	sentQuery := emailVerificationOTPSentQuery(command.EmailVerificationOTPGeneratedID)
@@ -46,6 +52,14 @@ func SendEmailValidationOTPCommandHandler(ctx context.Context, command SendEmail
 		events:   events,
 		query:    query,
 	}
+	subjectKey, ok, err := keys.GetSubjectDataKey(ctx, command.UserRegisteredID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return eventstore.ErrNotFound
+	}
+	model.subjectKey = subjectKey
 	for _, resolved := range model.events {
 		model.handle(resolved)
 	}
@@ -80,7 +94,7 @@ func (m *emailValidationOTPContext) handle(resolved eventstore.ResolvedEvent) {
 		m.code, _ = resolved.Event.Data["otpCode"].(string)
 		m.expiresAt, _ = resolved.Event.Data["expiresAt"].(string)
 	case UserRegistered:
-		m.email, _ = resolved.Event.Data["email"].(string)
+		m.email = protectedpii.MustDecryptEventStringWithDataKey(protectedpii.FromEnv(), m.subjectKey, resolved.Event.Data, UserRegisteredEmailField)
 	case EmailVerificationOTPSent:
 		m.alreadySent = true
 	}

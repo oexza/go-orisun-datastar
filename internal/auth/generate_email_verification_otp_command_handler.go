@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/oexza/go-orisun-datastar/internal/commandlimits"
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
 	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
 	"github.com/oexza/go-orisun-datastar/internal/views"
@@ -23,6 +24,9 @@ type GenerateEmailVerificationOTPResult struct {
 }
 
 func GenerateEmailVerificationOTPCommandHandler(ctx context.Context, command GenerateEmailVerificationOTPCommand, saver eventstore.Saver, retriever eventstore.Retriever) (GenerateEmailVerificationOTPResult, error) {
+	if err := commandlimits.Assert(command); err != nil {
+		return GenerateEmailVerificationOTPResult{}, err
+	}
 	model, err := loadGenerateEmailVerificationOTPContext(ctx, command, retriever)
 	if err != nil {
 		return GenerateEmailVerificationOTPResult{}, err

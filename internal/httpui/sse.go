@@ -44,6 +44,62 @@ func notifyOnce(updates chan<- struct{}) {
 	}
 }
 
+type closeableSubscription interface {
+	Close() error
+}
+
+type viewStoreFatMorphConfig[T any] struct {
+	Key       string
+	Store     viewstore.Store
+	Refresh   func(context.Context) error
+	Subscribe func(context.Context, func()) (closeableSubscription, error)
+	Patch     func(*datastar.ServerSentEventGenerator, T) error
+}
+
+func streamViewStoreFatMorph[T any](ctx context.Context, sse *datastar.ServerSentEventGenerator, config viewStoreFatMorphConfig[T]) error {
+	updates := make(chan struct{}, 1)
+	if err := config.Refresh(ctx); err != nil {
+		return err
+	}
+
+	watcher, err := config.Store.Watch(ctx, config.Key, viewstore.WatchOptions{IgnoreDeletes: true})
+	if err != nil {
+		return err
+	}
+	defer watcher.Stop()
+
+	if config.Subscribe != nil {
+		subscription, err := config.Subscribe(ctx, func() { notifyOnce(updates) })
+		if err != nil {
+			return err
+		}
+		defer subscription.Close()
+	}
+
+	notifyOnce(updates)
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-updates:
+			if err := config.Refresh(ctx); err != nil {
+				return err
+			}
+		case entry, ok := <-watcher.Updates():
+			if !ok {
+				return nil
+			}
+			var state T
+			if err := entry.JSON(&state); err != nil {
+				return err
+			}
+			if err := config.Patch(sse, state); err != nil {
+				return err
+			}
+		}
+	}
+}
+
 func watchViewState[T any](ctx context.Context, watcher viewstore.Watcher, onUpdate func(T) error) error {
 	for {
 		select {

@@ -55,3 +55,7 @@ ON CONFLICT (user_id) DO UPDATE SET
     last_event_commit_position = EXCLUDED.last_event_commit_position,
     last_event_prepare_position = EXCLUDED.last_event_prepare_position,
     updated_at = CURRENT_TIMESTAMP;
+
+-- name: DeleteProfileByRegisteredID :exec
+DELETE FROM profile_stats
+WHERE user_id = @user_registered_id;

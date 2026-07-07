@@ -52,6 +52,7 @@ func (h *RegistrationOTPToBeGeneratedEventHandler) handle(ctx context.Context, r
 	firstName, _ := resolved.Event.Data["firstName"].(string)
 	lastName, _ := resolved.Event.Data["lastName"].(string)
 	username, _ := resolved.Event.Data["username"].(string)
+
 	user := views.User{
 		UserRegisteredID: userRegisteredID,
 		Name:             strings.TrimSpace(firstName + " " + lastName),

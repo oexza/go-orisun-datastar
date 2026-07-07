@@ -14,10 +14,11 @@ type EmailValidationOTPToBeSentEventHandler struct {
 	retriever eventstore.Retriever
 	saver     eventstore.Saver
 	sender    EmailSender
+	keys      SubjectPiiKeyPort
 }
 
-func NewEmailValidationOTPToBeSentEventHandler(subscriber eventstore.Subscriber, checkpointer eventstore.Checkpointer, retriever eventstore.Retriever, saver eventstore.Saver, sender EmailSender, logger *slog.Logger) (*EmailValidationOTPToBeSentEventHandler, error) {
-	handler := &EmailValidationOTPToBeSentEventHandler{retriever: retriever, saver: saver, sender: sender}
+func NewEmailValidationOTPToBeSentEventHandler(subscriber eventstore.Subscriber, checkpointer eventstore.Checkpointer, retriever eventstore.Retriever, saver eventstore.Saver, sender EmailSender, keys SubjectPiiKeyPort, logger *slog.Logger) (*EmailValidationOTPToBeSentEventHandler, error) {
+	handler := &EmailValidationOTPToBeSentEventHandler{retriever: retriever, saver: saver, sender: sender, keys: keys}
 	global, err := eventstore.NewGlobalEventHandler(eventstore.GlobalEventHandlerConfig{
 		Subscriber:      subscriber,
 		Checkpointer:    checkpointer,
@@ -52,7 +53,7 @@ func (h *EmailValidationOTPToBeSentEventHandler) handle(ctx context.Context, res
 		UserRegisteredID:                userRegisteredID,
 		EmailVerificationOTPGeneratedID: otpID,
 		Metadata:                        eventstore.EventHandlerCommandMetadata(EmailValidationOTPToBeSentEventHandlerName, resolved),
-	}, h.saver, h.retriever, h.sender)
+	}, h.saver, h.retriever, h.sender, h.keys)
 }
 
 func emailValidationOTPToBeSentEventHandlerQuery() eventstore.Query {

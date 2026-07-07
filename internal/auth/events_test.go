@@ -3,6 +3,8 @@ package auth
 import (
 	"testing"
 	"time"
+
+	"github.com/oexza/go-orisun-datastar/internal/protectedpii"
 )
 
 func TestPasswordResetCompletedEventMatchesFrasesShape(t *testing.T) {
@@ -46,7 +48,11 @@ func TestEventSpecificIDMatchesEventID(t *testing.T) {
 		t.Fatalf("password changed event id = %q, passwordChangedId = %v", passwordChanged.EventID, passwordChanged.Data["passwordChangedId"])
 	}
 
-	userNameChanged := NewUserNameChangedEvent("name-changed-id", "Ada Lovelace", changedAt, "user-id", nil)
+	subjectKey, err := protectedpii.GenerateSubjectDataKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	userNameChanged := NewUserNameChangedEvent("name-changed-id", "Ada Lovelace", changedAt, "user-id", subjectKey, nil)
 	if userNameChanged.EventID != userNameChanged.Data["userNameChangedId"] {
 		t.Fatalf("name changed event id = %q, userNameChangedId = %v", userNameChanged.EventID, userNameChanged.Data["userNameChangedId"])
 	}

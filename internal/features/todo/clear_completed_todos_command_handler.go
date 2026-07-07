@@ -3,6 +3,7 @@ package todo
 import (
 	"context"
 
+	"github.com/oexza/go-orisun-datastar/internal/commandlimits"
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
 	"github.com/oexza/go-orisun-datastar/internal/views"
 )
@@ -13,6 +14,9 @@ type ClearCompletedTodosCommand struct {
 }
 
 func ClearCompletedTodosCommandHandler(ctx context.Context, command ClearCompletedTodosCommand, readModel TodoReadModelReader, saver eventstore.Saver, retriever eventstore.Retriever) error {
+	if err := commandlimits.Assert(command); err != nil {
+		return err
+	}
 	model, err := loadClearCompletedTodosContext(ctx, readModel, command.UserRegisteredID)
 	if err != nil {
 		return err

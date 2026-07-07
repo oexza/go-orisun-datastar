@@ -128,3 +128,27 @@ FROM auth_user u
 JOIN auth_account a ON a.user_id = u.id AND a.provider_id = 'credential'
 LEFT JOIN profile_stats p ON p.user_id = u.user_registered_id
 WHERE u.email = @email;
+
+-- name: DeleteAuthVerificationsByRegisteredID :exec
+DELETE FROM auth_verification
+WHERE identifier IN ('email:' || @user_registered_id, 'password-reset:' || @user_registered_id);
+
+-- name: DeleteAuthSessionsByRegisteredID :exec
+DELETE FROM auth_session
+WHERE user_id IN (
+    SELECT id
+    FROM auth_user
+    WHERE user_registered_id = @user_registered_id
+);
+
+-- name: DeleteAuthAccountsByRegisteredID :exec
+DELETE FROM auth_account
+WHERE user_id IN (
+    SELECT id
+    FROM auth_user
+    WHERE user_registered_id = @user_registered_id
+);
+
+-- name: DeleteAuthUserByRegisteredID :exec
+DELETE FROM auth_user
+WHERE user_registered_id = @user_registered_id;

@@ -41,60 +41,32 @@ func (s Server) todosPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) todosStream(w http.ResponseWriter, r *http.Request) {
+	setRequestAction(r, "todo.stream.connect", nil)
 	user := currentUser(r)
 	sse := newSSE(w, r)
 	ctx := r.Context()
 	key := viewstore.TodoListKey(s.sessionID(r), user.UserRegisteredID)
 
-	updates := make(chan struct{}, 1)
-
-	if err := s.refreshTodoViewState(ctx, key, user.UserRegisteredID); err != nil {
-		_ = alert(sse, err.Error())
-		return
-	}
-	watcher, err := s.ViewStore.Watch(ctx, key, viewstore.WatchOptions{IgnoreDeletes: true})
-	if err != nil {
-		_ = alert(sse, err.Error())
-		return
-	}
-	defer watcher.Stop()
-
-	sub, err := s.Subscriber.Subscribe(ctx, todo.Channel(user.UserRegisteredID), func(context.Context, []byte) {
-		notifyOnce(updates)
+	err := streamViewStoreFatMorph[todoListViewState](ctx, sse, viewStoreFatMorphConfig[todoListViewState]{
+		Key:     key,
+		Store:   s.ViewStore,
+		Refresh: func(ctx context.Context) error { return s.refreshTodoViewState(ctx, key, user.UserRegisteredID) },
+		Subscribe: func(ctx context.Context, notify func()) (closeableSubscription, error) {
+			return s.Subscriber.Subscribe(ctx, todo.Channel(user.UserRegisteredID), func(context.Context, []byte) {
+				notify()
+			})
+		},
+		Patch: func(sse *datastar.ServerSentEventGenerator, state todoListViewState) error {
+			return sse.PatchElementTempl(views.TodoWorkspace(state.Todos), datastar.WithSelector("#todo-workspace"))
+		},
 	})
 	if err != nil {
-		return
-	}
-	defer sub.Close()
-
-	notifyOnce(updates)
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-updates:
-			if err := s.refreshTodoViewState(ctx, key, user.UserRegisteredID); err != nil {
-				_ = alert(sse, err.Error())
-				return
-			}
-		case entry, ok := <-watcher.Updates():
-			if !ok {
-				return
-			}
-			var state todoListViewState
-			if err := entry.JSON(&state); err != nil {
-				_ = alert(sse, err.Error())
-				return
-			}
-			if err := sse.PatchElementTempl(views.TodoWorkspace(state.Todos), datastar.WithSelector("#todo-workspace"), datastar.WithMode(datastar.ElementPatchModeInner)); err != nil {
-				return
-			}
-		}
+		_ = alert(sse, err.Error())
 	}
 }
 
 func (s Server) createTodo(w http.ResponseWriter, r *http.Request) {
+	setRequestAction(r, "todo.create", nil)
 	_ = r.ParseForm()
 	user := currentUser(r)
 	_, err := todo.CreateTodoCommandHandler(r.Context(), todo.CreateTodoCommand{
@@ -110,6 +82,7 @@ func (s Server) createTodo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) renameTodo(w http.ResponseWriter, r *http.Request) {
+	setRequestAction(r, "todo.rename", map[string]any{"todoId": chi.URLParam(r, "todoID")})
 	_ = r.ParseForm()
 	user := currentUser(r)
 	_, err := todo.RenameTodoCommandHandler(r.Context(), todo.RenameTodoCommand{
@@ -122,6 +95,7 @@ func (s Server) renameTodo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) completeTodo(w http.ResponseWriter, r *http.Request) {
+	setRequestAction(r, "todo.complete", map[string]any{"todoId": chi.URLParam(r, "todoID")})
 	user := currentUser(r)
 	_, err := todo.CompleteTodoCommandHandler(r.Context(), todo.CompleteTodoCommand{
 		UserRegisteredID: user.UserRegisteredID,
@@ -132,6 +106,7 @@ func (s Server) completeTodo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) reopenTodo(w http.ResponseWriter, r *http.Request) {
+	setRequestAction(r, "todo.reopen", map[string]any{"todoId": chi.URLParam(r, "todoID")})
 	user := currentUser(r)
 	_, err := todo.ReopenTodoCommandHandler(r.Context(), todo.ReopenTodoCommand{
 		UserRegisteredID: user.UserRegisteredID,
@@ -142,6 +117,7 @@ func (s Server) reopenTodo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) deleteTodo(w http.ResponseWriter, r *http.Request) {
+	setRequestAction(r, "todo.delete", map[string]any{"todoId": chi.URLParam(r, "todoID")})
 	user := currentUser(r)
 	_, err := todo.DeleteTodoCommandHandler(r.Context(), todo.DeleteTodoCommand{
 		UserRegisteredID: user.UserRegisteredID,
@@ -152,6 +128,7 @@ func (s Server) deleteTodo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) completeActiveTodos(w http.ResponseWriter, r *http.Request) {
+	setRequestAction(r, "todo.bulk.complete_active", nil)
 	user := currentUser(r)
 	err := todo.CompleteAllActiveTodosCommandHandler(r.Context(), todo.CompleteAllActiveTodosCommand{
 		UserRegisteredID: user.UserRegisteredID,
@@ -161,6 +138,7 @@ func (s Server) completeActiveTodos(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) reopenCompletedTodos(w http.ResponseWriter, r *http.Request) {
+	setRequestAction(r, "todo.bulk.reopen_completed", nil)
 	user := currentUser(r)
 	err := todo.ReopenAllCompletedTodosCommandHandler(r.Context(), todo.ReopenAllCompletedTodosCommand{
 		UserRegisteredID: user.UserRegisteredID,
@@ -170,6 +148,7 @@ func (s Server) reopenCompletedTodos(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) clearCompletedTodos(w http.ResponseWriter, r *http.Request) {
+	setRequestAction(r, "todo.bulk.clear_completed", nil)
 	user := currentUser(r)
 	err := todo.ClearCompletedTodosCommandHandler(r.Context(), todo.ClearCompletedTodosCommand{
 		UserRegisteredID: user.UserRegisteredID,

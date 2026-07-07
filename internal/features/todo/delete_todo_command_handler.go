@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/oexza/go-orisun-datastar/internal/commandlimits"
 	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
 
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
@@ -20,6 +21,9 @@ type DeleteTodoResult struct {
 }
 
 func DeleteTodoCommandHandler(ctx context.Context, command DeleteTodoCommand, saver eventstore.Saver, retriever eventstore.Retriever) (DeleteTodoResult, error) {
+	if err := commandlimits.Assert(command); err != nil {
+		return DeleteTodoResult{}, err
+	}
 	model, err := loadDeleteTodoContext(ctx, retriever, command.TodoID, command.UserRegisteredID)
 	if err != nil {
 		return DeleteTodoResult{}, err

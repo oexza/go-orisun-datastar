@@ -6,7 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/oexza/go-orisun-datastar/internal/commandlimits"
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
+	"github.com/oexza/go-orisun-datastar/internal/protectedpii"
 	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
 	"github.com/oexza/go-orisun-datastar/internal/views"
 )
@@ -22,8 +24,11 @@ type UpdateUserNameResult struct {
 	Skipped bool
 }
 
-func UpdateUserNameCommandHandler(ctx context.Context, command UpdateUserNameCommand, saver eventstore.Saver, retriever eventstore.Retriever) (UpdateUserNameResult, error) {
-	model, err := loadUpdateUserNameContext(ctx, command, retriever)
+func UpdateUserNameCommandHandler(ctx context.Context, command UpdateUserNameCommand, saver eventstore.Saver, retriever eventstore.Retriever, keys SubjectPiiKeyPort) (UpdateUserNameResult, error) {
+	if err := commandlimits.Assert(command); err != nil {
+		return UpdateUserNameResult{}, err
+	}
+	model, err := loadUpdateUserNameContext(ctx, command, retriever, keys)
 	if err != nil {
 		return UpdateUserNameResult{}, err
 	}
@@ -33,9 +38,8 @@ func UpdateUserNameCommandHandler(ctx context.Context, command UpdateUserNameCom
 	if model.name == model.nextName {
 		return UpdateUserNameResult{Name: model.nextName, Skipped: true}, nil
 	}
-
 	eventID := uuidv7.NewString()
-	event := NewUserNameChangedEvent(eventID, model.nextName, time.Now(), command.User.UserRegisteredID, nil)
+	event := NewUserNameChangedEvent(eventID, model.nextName, time.Now(), command.User.UserRegisteredID, model.subjectKey, nil)
 	if _, err := eventstore.SaveCommandEvents(ctx, saver, command.Metadata, []eventstore.DomainEvent{event}, model.position, model.events, model.query); err != nil {
 		return UpdateUserNameResult{}, err
 	}
@@ -46,12 +50,13 @@ type updateUserNameContext struct {
 	userExists bool
 	name       string
 	nextName   string
+	subjectKey protectedpii.SubjectDataKey
 	position   eventstore.Position
 	events     []eventstore.ResolvedEvent
 	query      eventstore.Query
 }
 
-func loadUpdateUserNameContext(ctx context.Context, command UpdateUserNameCommand, retriever eventstore.Retriever) (*updateUserNameContext, error) {
+func loadUpdateUserNameContext(ctx context.Context, command UpdateUserNameCommand, retriever eventstore.Retriever, keys SubjectPiiKeyPort) (*updateUserNameContext, error) {
 	name := strings.TrimSpace(command.Name)
 	if name == "" {
 		return nil, errors.New("name is required")
@@ -64,7 +69,14 @@ func loadUpdateUserNameContext(ctx context.Context, command UpdateUserNameComman
 		return nil, err
 	}
 	events := eventstore.EventsFromLatest(latest.Results)
-	model := &updateUserNameContext{nextName: name, position: latest.ContextPosition, events: events, query: query}
+	subjectKey, ok, err := keys.GetSubjectDataKey(ctx, command.User.UserRegisteredID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, eventstore.ErrNotFound
+	}
+	model := &updateUserNameContext{nextName: name, subjectKey: subjectKey, position: latest.ContextPosition, events: events, query: query}
 	for _, event := range events {
 		model.handle(event)
 	}
@@ -75,15 +87,16 @@ func (m *updateUserNameContext) handle(resolved eventstore.ResolvedEvent) {
 	switch resolved.Event.EventType {
 	case UserRegistered:
 		m.userExists = true
-		firstName, _ := resolved.Event.Data[UserRegisteredFirstNameField].(string)
-		lastName, _ := resolved.Event.Data[UserRegisteredLastNameField].(string)
-		username, _ := resolved.Event.Data[UserRegisteredUsernameField].(string)
+		protector := protectedpii.FromEnv()
+		firstName := protectedpii.MustDecryptEventStringWithDataKey(protector, m.subjectKey, resolved.Event.Data, UserRegisteredFirstNameField)
+		lastName := protectedpii.MustDecryptEventStringWithDataKey(protector, m.subjectKey, resolved.Event.Data, UserRegisteredLastNameField)
+		username := protectedpii.MustDecryptEventStringWithDataKey(protector, m.subjectKey, resolved.Event.Data, UserRegisteredUsernameField)
 		m.name = strings.TrimSpace(firstName + " " + lastName)
 		if m.name == "" {
 			m.name = username
 		}
 	case UserNameChanged:
-		m.name, _ = resolved.Event.Data[UserNameChangedNameField].(string)
+		m.name = protectedpii.MustDecryptEventStringWithDataKey(protectedpii.FromEnv(), m.subjectKey, resolved.Event.Data, UserNameChangedNameField)
 	}
 	if resolved.Position.After(m.position) {
 		m.position = resolved.Position

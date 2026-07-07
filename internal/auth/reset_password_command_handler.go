@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/oexza/go-orisun-datastar/internal/commandlimits"
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
 	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
 	"golang.org/x/crypto/bcrypt"
@@ -21,6 +22,9 @@ type PasswordResetReader interface {
 }
 
 func ResetPasswordCommandHandler(ctx context.Context, command ResetPasswordCommand, resets PasswordResetReader, users AuthUserByIDReader, saver eventstore.Saver, retriever eventstore.Retriever) error {
+	if err := commandlimits.Assert(command); err != nil {
+		return err
+	}
 	if len(command.Password) < 6 {
 		return errors.New("password must be at least 6 characters")
 	}

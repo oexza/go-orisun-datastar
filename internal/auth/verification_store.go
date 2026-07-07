@@ -8,6 +8,7 @@ import (
 
 	"github.com/oexza/go-orisun-datastar/internal/appdb"
 	"github.com/oexza/go-orisun-datastar/internal/dbsql"
+	"github.com/oexza/go-orisun-datastar/internal/protectedpii"
 	"zombiezen.com/go/sqlite"
 )
 
@@ -24,7 +25,7 @@ func (s *VerificationStore) CreateEmailVerificationOTP(ctx context.Context, user
 		return dbsql.OnceCreateAuthVerification(conn, dbsql.CreateAuthVerificationParams{
 			Id:         otpID,
 			Identifier: "email:" + userRegisteredID,
-			Value:      code,
+			Value:      verificationValueHash("email-verification-otp", code),
 			ExpiresAt:  appdb.SQLTime(expiresAt),
 		})
 	})
@@ -35,7 +36,7 @@ func (s *VerificationStore) CreatePasswordReset(ctx context.Context, userRegiste
 		return dbsql.OnceCreateAuthVerification(conn, dbsql.CreateAuthVerificationParams{
 			Id:         requestID,
 			Identifier: "password-reset:" + userRegisteredID,
-			Value:      token,
+			Value:      verificationValueHash("password-reset-token", token),
 			ExpiresAt:  appdb.SQLTime(expiresAt),
 		})
 	})
@@ -45,7 +46,7 @@ func (s *VerificationStore) PasswordResetByToken(ctx context.Context, token stri
 	var verification *dbsql.PasswordResetVerificationByTokenRes
 	if err := s.db.ReadTX(ctx, func(conn *sqlite.Conn) error {
 		var err error
-		verification, err = dbsql.OncePasswordResetVerificationByToken(conn, token)
+		verification, err = dbsql.OncePasswordResetVerificationByToken(conn, verificationValueHash("password-reset-token", token))
 		return err
 	}); err != nil || verification == nil {
 		return PasswordResetVerification{}, errors.New("invalid or expired reset token")
@@ -54,6 +55,10 @@ func (s *VerificationStore) PasswordResetByToken(ctx context.Context, token stri
 		ID:     verification.Id,
 		UserID: strings.TrimPrefix(verification.Identifier, "password-reset:"),
 	}, nil
+}
+
+func verificationValueHash(field, value string) string {
+	return protectedpii.FromEnv().SensitiveBlindIndex(field, value)
 }
 
 type PasswordResetVerification struct {

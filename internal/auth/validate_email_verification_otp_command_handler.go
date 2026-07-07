@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/oexza/go-orisun-datastar/internal/commandlimits"
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
 	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
 	"github.com/oexza/go-orisun-datastar/internal/views"
@@ -18,6 +19,9 @@ type ValidateEmailVerificationOTPCommand struct {
 }
 
 func ValidateEmailVerificationOTPCommandHandler(ctx context.Context, command ValidateEmailVerificationOTPCommand, saver eventstore.Saver, retriever eventstore.Retriever) error {
+	if err := commandlimits.Assert(command); err != nil {
+		return err
+	}
 	model, err := loadValidateEmailVerificationOTPContext(ctx, command, retriever)
 	if err != nil {
 		return err

@@ -68,6 +68,10 @@ func ProfileKey(sessionID, userRegisteredID string) string {
 	return viewKey("profile", sessionID, userRegisteredID)
 }
 
+func OpsMetricsKey() string {
+	return viewKey("ops", "event-handlers")
+}
+
 func viewKey(parts ...string) string {
 	clean := make([]string, 0, len(parts))
 	for _, part := range parts {

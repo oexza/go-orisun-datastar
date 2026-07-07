@@ -11,12 +11,12 @@ func BoundaryIndexes() []eventstore.BoundaryIndexDefinition {
 	return []eventstore.BoundaryIndexDefinition{
 		{
 			Name:       "user_registered_email",
-			Fields:     []string{auth.UserRegisteredEmailField},
+			Fields:     []string{auth.UserRegisteredEmailHashField},
 			EventTypes: []string{auth.UserRegistered},
 		},
 		{
 			Name:       "user_registered_username",
-			Fields:     []string{auth.UserRegisteredUsernameField},
+			Fields:     []string{auth.UserRegisteredUsernameHashField},
 			EventTypes: []string{auth.UserRegistered},
 		},
 		{
@@ -54,6 +54,8 @@ func BoundaryIndexes() []eventstore.BoundaryIndexDefinition {
 				auth.PasswordResetRequested,
 				auth.PasswordResetCompleted,
 				auth.PasswordChanged,
+				auth.AccountDeletionRequested,
+				auth.AccountDeleted,
 				profile.ProfileImageUploaded,
 				profile.ProfileHeaderImageUploaded,
 				profile.ProfileBioUpdated,
@@ -68,6 +70,36 @@ func BoundaryIndexes() []eventstore.BoundaryIndexDefinition {
 			Name:       "todo_scope",
 			Fields:     []string{todo.TodoScopeIDField, todo.TodoScopeUserRegisteredIDField},
 			EventTypes: []string{todo.TodoCreated, todo.TodoRenamed, todo.TodoCompleted, todo.TodoReopened, todo.TodoDeleted},
+		},
+		{
+			Name:       "account_deletion_requested_id",
+			Fields:     []string{auth.AccountDeletionRequestedIDField},
+			EventTypes: []string{auth.AccountDeletionRequested},
+		},
+		{
+			Name:       "scope_account_deletion_requested_id",
+			Fields:     []string{"scope.accountDeletionRequestedId"},
+			EventTypes: []string{auth.AccountDeleted},
+		},
+		{
+			Name:       "login_attempt_recorded_id",
+			Fields:     []string{auth.LoginAttemptRecordedIDField},
+			EventTypes: []string{auth.LoginAttemptRecorded},
+		},
+		{
+			Name:       "login_attempt_identifier_hash",
+			Fields:     []string{auth.LoginAttemptIdentifierHashField},
+			EventTypes: []string{auth.LoginAttemptRecorded},
+		},
+		{
+			Name:       "login_attempt_ip_hash",
+			Fields:     []string{auth.LoginAttemptIPAddressHashField},
+			EventTypes: []string{auth.LoginAttemptRecorded},
+		},
+		{
+			Name:       "login_attempt_user_registered_id",
+			Fields:     []string{auth.LoginAttemptUserRegisteredIDField},
+			EventTypes: []string{auth.LoginAttemptRecorded},
 		},
 	}
 }
