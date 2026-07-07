@@ -150,6 +150,10 @@ func todoProgressStyle(stats TodoStats) string {
 	return fmt.Sprintf("width: %d%%", stats.Completion)
 }
 
+func todoProgressCustomProperty(stats TodoStats) string {
+	return fmt.Sprintf("--progress: %d%%", stats.Completion)
+}
+
 func todoCountLabel(count int) string {
 	return fmt.Sprint(count)
 }

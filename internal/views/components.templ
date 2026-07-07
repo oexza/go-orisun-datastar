@@ -33,15 +33,15 @@ templ AppNav(user User, active string) {
 	<nav class="app-nav navbar">
 		<div class="navbar-start">
 			<a class="brand-link" href="/todos" aria-label="Go-Orisun-Datastar todos">
-				<span class="brand-mark">G</span>
+				<span class="brand-mark">OD</span>
 				<span class="brand-copy">
-					<span class="brand-title">Go-Orisun-Datastar</span>
-					<span class="brand-subtitle">Event-sourced starter</span>
+					<span class="brand-title">Orisun Datastar</span>
+					<span class="brand-subtitle">Event-sourced UI</span>
 				</span>
 			</a>
 		</div>
 		<div class="navbar-end nav-actions">
-			<div class="nav-tabs hidden sm:flex">
+			<div class="nav-tabs">
 				<a class={ "nav-tab", templ.KV("active", active == "todos") } href="/todos">Todos</a>
 				<a class={ "nav-tab", templ.KV("active", active == "profile") } href="/profile">Profile</a>
 				<a class={ "nav-tab", templ.KV("active", active == "settings") } href="/profile/settings">Settings</a>
@@ -68,19 +68,41 @@ templ AuthForm(action string, title string, fields []Field, errors map[string]st
 	<main id="auth-page" class="auth-layout">
 		<section class="auth-intro">
 			<a class="brand-link brand-link-large" href="/login">
-				<span class="brand-mark">G</span>
+				<span class="brand-mark">OD</span>
 				<span class="brand-copy">
-					<span class="brand-title">Go-Orisun-Datastar</span>
-					<span class="brand-subtitle">Orisun events, Datastar UI</span>
+					<span class="brand-title">Orisun Datastar</span>
+					<span class="brand-subtitle">Events, projections, fragments</span>
 				</span>
 			</a>
-			<h1>Server-rendered flows that stay fast and auditable.</h1>
-			<p>Commands append events, handlers project state, and Datastar streams the small UI changes that matter.</p>
+			<div class="auth-copy">
+				<p class="eyebrow">Go starter kit</p>
+				<h1>Beautiful server-rendered flows for auditable product teams.</h1>
+				<p>Commands append durable facts, projections stay focused, and every interface update lands as a precise fragment.</p>
+			</div>
+			<div class="auth-showcase" aria-hidden="true">
+				<div class="auth-window">
+					<div class="auth-window-bar">
+						<span></span>
+						<span></span>
+						<span></span>
+					</div>
+					<div class="auth-stream">
+						<span class="stream-line strong"></span>
+						<span class="stream-line"></span>
+						<span class="stream-line short"></span>
+					</div>
+					<div class="auth-cards">
+						<span></span>
+						<span></span>
+						<span></span>
+					</div>
+				</div>
+			</div>
 		</section>
-		<section class="auth-card card">
+		<section class="auth-card card" aria-label={ title }>
 			<div class="card-body">
 				<div class="form-header">
-					<p class="eyebrow">Account</p>
+					<p class="eyebrow">Secure account</p>
 					<h2>{ title }</h2>
 				</div>
 				if errors != nil && errors["error"] != "" {

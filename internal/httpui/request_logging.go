@@ -30,6 +30,19 @@ func (r *statusRecorder) Write(data []byte) (int, error) {
 	return n, err
 }
 
+// Flush and Unwrap keep SSE streaming working: chi's Compress wrapper and
+// http.ResponseController both need the wrapped writer to expose flushing,
+// otherwise events stay in the response buffer and never reach the browser.
+func (r *statusRecorder) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func (r *statusRecorder) Unwrap() http.ResponseWriter {
+	return r.ResponseWriter
+}
+
 func requestLogging(logger *slog.Logger) func(http.Handler) http.Handler {
 	if logger == nil {
 		logger = slog.Default()

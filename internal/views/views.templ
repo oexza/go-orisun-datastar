@@ -80,13 +80,28 @@ templ ValidateEmailForm(userID string, errors map[string]string) {
 
 templ TodosPage(user User, todos []Todo) {
 	@Base("Todos") {
-		<main class="page">
+		{{ stats := todoStats(todos) }}
+		<main class="page app-page">
 			@AppNav(user, "todos")
-			<section class="page-header">
-				<h1 class="page-title">Todos</h1>
-				<p class="page-subtitle">A compact event-sourced workflow powered by Orisun projections and Datastar fragments.</p>
+			<section class="dashboard-hero">
+				<div class="page-header">
+					<p class="eyebrow">Command center</p>
+					<h1 class="page-title">Todos</h1>
+					<p class="page-subtitle">A compact event-sourced workflow powered by Orisun projections and Datastar fragments.</p>
+				</div>
+				<div class="hero-snapshot" aria-label="Todo snapshot">
+					<div>
+						<span class="snapshot-label">Completion</span>
+						<strong>{ todoCompletionLabel(stats) }</strong>
+					</div>
+					<div class="snapshot-ring" style={ todoProgressCustomProperty(stats) }>
+						<span>{ todoCountLabel(stats.Active) }</span>
+					</div>
+					<p>{ todoCountLabel(stats.Active) } active, { todoCountLabel(stats.Completed) } complete</p>
+				</div>
 			</section>
 			<form class="todo-form" data-on:submit={ postFormSSE("/todos") } data-indicator="creatingTodo">
+				<span class="composer-mark" aria-hidden="true"></span>
 				<input class="input w-full" id="todo-title" name="title" data-bind:new-todo-title maxlength="160" required placeholder="Add a todo"/>
 				<button class="btn btn-primary" type="submit">Add</button>
 				@SseIndicator("creatingTodo")
@@ -101,15 +116,15 @@ templ TodoWorkspace(todos []Todo) {
 	{{ stats := todoStats(todos) }}
 	<section id="todo-workspace">
 		<section class="todo-summary" aria-label="Todo summary">
-			<div class="todo-metric">
+			<div class="todo-metric total">
 				<span>Total</span>
 				<strong>{ todoCountLabel(stats.Total) }</strong>
 			</div>
-			<div class="todo-metric">
+			<div class="todo-metric active">
 				<span>Active</span>
 				<strong>{ todoCountLabel(stats.Active) }</strong>
 			</div>
-			<div class="todo-metric">
+			<div class="todo-metric completed">
 				<span>Done</span>
 				<strong>{ todoCountLabel(stats.Completed) }</strong>
 			</div>
@@ -186,14 +201,14 @@ templ TodoRow(todo Todo) {
 			}
 		</span>
 		<form data-on:submit={ todoDeleteSSE(todo) }>
-			<button class="btn btn-ghost btn-sm text-error" aria-label="Delete todo">Delete</button>
+			<button class="btn btn-ghost btn-sm todo-delete" aria-label="Delete todo">Delete</button>
 		</form>
 	</article>
 }
 
 templ Profile(user User) {
 	@Base("Profile") {
-		<main class="page">
+		<main class="page app-page">
 			@AppNav(user, "profile")
 			<div data-init={ longRunningGetSSE("/profile/stream") }></div>
 			@ProfilePanel(user)
@@ -223,6 +238,14 @@ templ ProfilePanel(user User) {
 			} else {
 				<p class="text-base-content/50">No bio yet.</p>
 			}
+			<div class="profile-facts" aria-label="Profile facts">
+				<span>{ user.Email }</span>
+				if user.EmailVerified {
+					<span>Verified email</span>
+				} else {
+					<span>Email pending</span>
+				}
+			</div>
 			<div>
 				<a class="btn btn-primary" href="/profile/edit">Edit profile</a>
 			</div>
@@ -304,9 +327,10 @@ templ ProfileEdit(user User, errors map[string]string) {
 }
 
 templ ProfileEditPanel(user User, errors map[string]string) {
-	<main id="profile-edit-page" class="page">
+	<main id="profile-edit-page" class="page app-page">
 		@AppNav(user, "profile")
 		<section class="page-header">
+			<p class="eyebrow">Profile studio</p>
 			<h1 class="page-title">Edit profile</h1>
 			<p class="page-subtitle">Update profile details through commands that publish profile events.</p>
 		</section>
@@ -338,9 +362,10 @@ templ ProfileEditPanel(user User, errors map[string]string) {
 
 templ Settings(user User) {
 	@Base("Settings") {
-		<main class="page">
+		<main class="page app-page">
 			@AppNav(user, "settings")
 			<section class="page-header">
+				<p class="eyebrow">Account controls</p>
 				<h1 class="page-title">Settings</h1>
 				<p class="page-subtitle">Account commands append events and update projections asynchronously.</p>
 			</section>
