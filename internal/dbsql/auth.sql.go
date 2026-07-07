@@ -101,6 +101,20 @@ func (q *Queries) CreateAuthVerification(ctx context.Context, arg CreateAuthVeri
 	return err
 }
 
+const deleteAuthAccountsByRegisteredID = `-- name: DeleteAuthAccountsByRegisteredID :exec
+DELETE FROM auth_account
+WHERE user_id IN (
+    SELECT id
+    FROM auth_user
+    WHERE user_registered_id = $1
+)
+`
+
+func (q *Queries) DeleteAuthAccountsByRegisteredID(ctx context.Context, userRegisteredID string) error {
+	_, err := q.db.Exec(ctx, deleteAuthAccountsByRegisteredID, userRegisteredID)
+	return err
+}
+
 const deleteAuthSessionByToken = `-- name: DeleteAuthSessionByToken :exec
 DELETE FROM auth_session
 WHERE token = $1
@@ -108,6 +122,40 @@ WHERE token = $1
 
 func (q *Queries) DeleteAuthSessionByToken(ctx context.Context, token string) error {
 	_, err := q.db.Exec(ctx, deleteAuthSessionByToken, token)
+	return err
+}
+
+const deleteAuthSessionsByRegisteredID = `-- name: DeleteAuthSessionsByRegisteredID :exec
+DELETE FROM auth_session
+WHERE user_id IN (
+    SELECT id
+    FROM auth_user
+    WHERE user_registered_id = $1
+)
+`
+
+func (q *Queries) DeleteAuthSessionsByRegisteredID(ctx context.Context, userRegisteredID string) error {
+	_, err := q.db.Exec(ctx, deleteAuthSessionsByRegisteredID, userRegisteredID)
+	return err
+}
+
+const deleteAuthUserByRegisteredID = `-- name: DeleteAuthUserByRegisteredID :exec
+DELETE FROM auth_user
+WHERE user_registered_id = $1
+`
+
+func (q *Queries) DeleteAuthUserByRegisteredID(ctx context.Context, userRegisteredID string) error {
+	_, err := q.db.Exec(ctx, deleteAuthUserByRegisteredID, userRegisteredID)
+	return err
+}
+
+const deleteAuthVerificationsByRegisteredID = `-- name: DeleteAuthVerificationsByRegisteredID :exec
+DELETE FROM auth_verification
+WHERE identifier IN ('email:' || $1, 'password-reset:' || $1)
+`
+
+func (q *Queries) DeleteAuthVerificationsByRegisteredID(ctx context.Context, userRegisteredID *string) error {
+	_, err := q.db.Exec(ctx, deleteAuthVerificationsByRegisteredID, userRegisteredID)
 	return err
 }
 

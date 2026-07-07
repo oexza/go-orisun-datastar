@@ -15,6 +15,7 @@ import (
 
 	"github.com/oexza/go-orisun-datastar/internal/auth"
 	"github.com/oexza/go-orisun-datastar/internal/config"
+	"github.com/oexza/go-orisun-datastar/internal/dbsql"
 	"github.com/oexza/go-orisun-datastar/internal/email"
 	"github.com/oexza/go-orisun-datastar/internal/eventcatalog"
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
@@ -23,13 +24,15 @@ import (
 	"github.com/oexza/go-orisun-datastar/internal/httpui"
 	"github.com/oexza/go-orisun-datastar/internal/natsbus"
 	"github.com/oexza/go-orisun-datastar/internal/postgres"
+	"github.com/oexza/go-orisun-datastar/internal/protectedpii"
 	"github.com/oexza/go-orisun-datastar/internal/storage"
 	"github.com/oexza/go-orisun-datastar/internal/viewstore"
 )
 
 type runOptions struct {
-	migrateOnly bool
-	seedOnly    bool
+	migrateOnly     bool
+	seedOnly        bool
+	resetReadModels bool
 }
 
 type appComponents struct {
@@ -41,6 +44,8 @@ type appComponents struct {
 	checkpointer     eventstore.Checkpointer
 	emailSender      email.Sender
 	profileStorage   profile.ObjectStore
+	piiKeys          *auth.SubjectPiiKeyStore
+	accountDeletion  *auth.AccountDataDeletionStore
 }
 
 type eventHandler interface {
@@ -68,8 +73,9 @@ func main() {
 func parseOptions() runOptions {
 	migrateOnly := flag.Bool("migrate-only", false, "run database migrations and exit")
 	seedOnly := flag.Bool("seed-only", false, "run seed tasks and exit")
+	resetReadModels := flag.Bool("reset-read-models", false, "reset PostgreSQL read models and event-handler checkpoints")
 	flag.Parse()
-	return runOptions{migrateOnly: *migrateOnly, seedOnly: *seedOnly}
+	return runOptions{migrateOnly: *migrateOnly, seedOnly: *seedOnly, resetReadModels: *resetReadModels}
 }
 
 func run(ctx context.Context, stop context.CancelFunc, cfg config.Config, opts runOptions, logger *slog.Logger) error {
@@ -88,6 +94,13 @@ func run(ctx context.Context, stop context.CancelFunc, cfg config.Config, opts r
 	}
 	if opts.seedOnly {
 		logger.Info("seed requested; no seed tasks are currently defined")
+		return nil
+	}
+	if opts.resetReadModels {
+		if err := resetReadModels(ctx, db); err != nil {
+			return fmt.Errorf("reset read models: %w", err)
+		}
+		logger.Info("read models and event-handler checkpoints reset", "database", cfg.PostgresDatabase)
 		return nil
 	}
 
@@ -114,6 +127,7 @@ func run(ctx context.Context, stop context.CancelFunc, cfg config.Config, opts r
 	app := httpui.Server{
 		Sessions:            components.sessionManager,
 		AuthUsers:           components.authUsers,
+		PIIKeys:             components.piiKeys,
 		PasswordCredentials: components.authUsers,
 		Verifications:       components.verifications,
 		Todos:               components.todoReadModel,
@@ -124,8 +138,41 @@ func run(ctx context.Context, stop context.CancelFunc, cfg config.Config, opts r
 		Subscriber:          bus,
 		ViewStore:           viewStore,
 		Development:         cfg.DevelopmentCookie,
+		Logger:              logger,
 	}
 	return serveHTTP(ctx, stop, cfg.Port, app.Routes(), logger)
+}
+
+func resetReadModels(ctx context.Context, db *pgxpool.Pool) error {
+	tx, err := db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	queries := dbsql.New(tx)
+	if err := queries.ResetReadModelAuthSessions(ctx); err != nil {
+		return err
+	}
+	if err := queries.ResetReadModelAuthAccounts(ctx); err != nil {
+		return err
+	}
+	if err := queries.ResetReadModelAuthVerifications(ctx); err != nil {
+		return err
+	}
+	if err := queries.ResetReadModelProfiles(ctx); err != nil {
+		return err
+	}
+	if err := queries.ResetReadModelTodos(ctx); err != nil {
+		return err
+	}
+	if err := queries.ResetReadModelAuthUsers(ctx); err != nil {
+		return err
+	}
+	if err := queries.ResetEventHandlerCheckpoints(ctx); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func startEventStore(ctx context.Context, cfg config.Config) (*eventstore.EmbeddedOrisun, error) {
@@ -166,6 +213,8 @@ func newAppComponents(db *pgxpool.Pool, store *eventstore.EmbeddedOrisun, cfg co
 	todoReadModel := todo.NewReadModel(db)
 	profileReadModel := profile.NewReadModel(db)
 	profileStorage := storage.NewLocalProvider(cfg.UploadDir, cfg.UploadBaseURL)
+	piiKeys := auth.NewSubjectPiiKeyStore(db, protectedpii.FromEnv())
+	accountDeletion := auth.NewAccountDataDeletionStore(db, profileStorage)
 
 	return appComponents{
 		sessionManager:   sessionManager,
@@ -176,6 +225,8 @@ func newAppComponents(db *pgxpool.Pool, store *eventstore.EmbeddedOrisun, cfg co
 		checkpointer:     eventstore.NewPostgresCheckpointer(db),
 		emailSender:      email.LogSender{Logger: logger},
 		profileStorage:   profileStorage,
+		piiKeys:          piiKeys,
+		accountDeletion:  accountDeletion,
 	}
 }
 
@@ -190,25 +241,31 @@ func eventHandlerFactories(store *eventstore.EmbeddedOrisun, bus *natsbus.Bus, c
 		{
 			name: "email validation OTP",
 			create: func() (eventHandler, error) {
-				return auth.NewEmailValidationOTPToBeSentEventHandler(store, components.checkpointer, store, store, components.emailSender, logger)
+				return auth.NewEmailValidationOTPToBeSentEventHandler(store, components.checkpointer, store, store, components.emailSender, components.piiKeys, logger)
 			},
 		},
 		{
 			name: "password reset email",
 			create: func() (eventHandler, error) {
-				return auth.NewPasswordResetEmailToBeSentEventHandler(store, components.checkpointer, store, store, components.emailSender, cfg.AppURL, logger)
+				return auth.NewPasswordResetEmailToBeSentEventHandler(store, components.checkpointer, store, store, components.emailSender, cfg.AppURL, components.piiKeys, logger)
 			},
 		},
 		{
 			name: "auth user projection",
 			create: func() (eventHandler, error) {
-				return auth.NewAuthUserProjectionEventHandler(store, components.checkpointer, store, components.authUsers, components.verifications, logger)
+				return auth.NewAuthUserProjectionEventHandler(store, components.checkpointer, store, components.authUsers, components.verifications, components.piiKeys, logger)
+			},
+		},
+		{
+			name: "account deletion",
+			create: func() (eventHandler, error) {
+				return auth.NewAccountDeletionEventHandler(store, components.checkpointer, store, store, components.accountDeletion, components.piiKeys, logger)
 			},
 		},
 		{
 			name: "profile read model",
 			create: func() (eventHandler, error) {
-				return profile.NewReadModelEventHandler(store, components.checkpointer, components.profileReadModel, bus, logger)
+				return profile.NewReadModelEventHandler(store, components.checkpointer, components.profileReadModel, bus, components.piiKeys, logger)
 			},
 		},
 		{

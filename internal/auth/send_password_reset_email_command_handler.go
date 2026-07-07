@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/oexza/go-orisun-datastar/internal/commandlimits"
 	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
 
 	"github.com/oexza/go-orisun-datastar/internal/email"
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
+	"github.com/oexza/go-orisun-datastar/internal/protectedpii"
 )
 
 type SendPasswordResetEmailCommand struct {
@@ -22,13 +24,17 @@ type passwordResetEmailContext struct {
 	email       string
 	token       string
 	expiresAt   string
+	subjectKey  protectedpii.SubjectDataKey
 	alreadySent bool
 	position    eventstore.Position
 	events      []eventstore.ResolvedEvent
 	query       eventstore.Query
 }
 
-func SendPasswordResetEmailCommandHandler(ctx context.Context, command SendPasswordResetEmailCommand, saver eventstore.Saver, retriever eventstore.Retriever, sender EmailSender, appURL string) error {
+func SendPasswordResetEmailCommandHandler(ctx context.Context, command SendPasswordResetEmailCommand, saver eventstore.Saver, retriever eventstore.Retriever, sender EmailSender, appURL string, keys SubjectPiiKeyPort) error {
+	if err := commandlimits.Assert(command); err != nil {
+		return err
+	}
 	requestedQuery := passwordResetRequestedQuery(command.PasswordResetRequestedID)
 	sentQuery := passwordResetEmailSentQuery(command.PasswordResetRequestedID)
 	query := combineQueries(requestedQuery, sentQuery)
@@ -42,6 +48,20 @@ func SendPasswordResetEmailCommandHandler(ctx context.Context, command SendPassw
 		position: latest.ContextPosition,
 		events:   events,
 		query:    query,
+	}
+	for _, resolved := range model.events {
+		if resolved.Event.EventType == PasswordResetRequested {
+			userRegisteredID, _ := eventstore.Scope(resolved.Event.Data)["userRegisteredId"].(string)
+			subjectKey, ok, err := keys.GetSubjectDataKey(ctx, userRegisteredID)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return eventstore.ErrNotFound
+			}
+			model.subjectKey = subjectKey
+			break
+		}
 	}
 	for _, resolved := range model.events {
 		model.handle(resolved)
@@ -72,8 +92,9 @@ func (m *passwordResetEmailContext) handle(resolved eventstore.ResolvedEvent) {
 	switch resolved.Event.EventType {
 	case PasswordResetRequested:
 		m.requestID, _ = resolved.Event.Data["passwordResetRequestedId"].(string)
-		m.email, _ = resolved.Event.Data["email"].(string)
-		m.token, _ = resolved.Event.Data["resetToken"].(string)
+		protector := protectedpii.FromEnv()
+		m.email = protectedpii.MustDecryptEventStringWithDataKey(protector, m.subjectKey, resolved.Event.Data, PasswordResetRequestedEmailField)
+		m.token = protectedpii.MustDecryptEventStringWithDataKey(protector, m.subjectKey, resolved.Event.Data, PasswordResetRequestedTokenField)
 		m.expiresAt, _ = resolved.Event.Data["expiresAt"].(string)
 	case PasswordResetEmailSent:
 		m.alreadySent = true

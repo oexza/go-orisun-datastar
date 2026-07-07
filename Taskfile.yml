@@ -34,6 +34,10 @@ tasks:
     cmds:
       - go run ./cmd/server -seed-only
 
+  reset-read-models:
+    cmds:
+      - go run ./cmd/server -reset-read-models
+
   templ:
     sources:
       - "**/*.templ"

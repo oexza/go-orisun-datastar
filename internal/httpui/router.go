@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -51,6 +52,7 @@ type VerificationStore interface {
 type Server struct {
 	Sessions            SessionManager
 	AuthUsers           AuthUserReader
+	PIIKeys             auth.SubjectPiiKeyPort
 	PasswordCredentials auth.PasswordCredentialReader
 	Verifications       VerificationStore
 	Todos               todo.TodoReadModelReader
@@ -61,13 +63,14 @@ type Server struct {
 	Subscriber          MessageSubscriber
 	ViewStore           viewstore.Store
 	Development         bool
+	Logger              *slog.Logger
 }
 
 func (s Server) Routes() http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
-	r.Use(middleware.Logger)
+	r.Use(requestLogging(s.Logger))
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Compress(5,
 		"text/html",
@@ -85,6 +88,7 @@ func (s Server) Routes() http.Handler {
 	if s.Development {
 		setupReload(r)
 	}
+	s.monitoringRoutes(r)
 	r.Handle("/static/*", resources.Handler())
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/todos", http.StatusFound) })
 

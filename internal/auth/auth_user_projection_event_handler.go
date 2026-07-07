@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
+	"github.com/oexza/go-orisun-datastar/internal/protectedpii"
 )
 
 const AuthUserProjectionEventHandlerName = "auth_user_projection_event_handler"
@@ -28,6 +29,7 @@ type AuthUserProjectionEventHandler struct {
 	writer        AuthUserProjectionWriter
 	verifications AuthVerificationProjectionWriter
 	retriever     eventstore.Retriever
+	keys          SubjectPiiKeyPort
 }
 
 func NewAuthUserProjectionEventHandler(
@@ -36,8 +38,9 @@ func NewAuthUserProjectionEventHandler(
 	retriever eventstore.Retriever,
 	writer AuthUserProjectionWriter,
 	verifications AuthVerificationProjectionWriter,
+	keys SubjectPiiKeyPort,
 	logger *slog.Logger) (*AuthUserProjectionEventHandler, error) {
-	handler := &AuthUserProjectionEventHandler{retriever: retriever, writer: writer, verifications: verifications}
+	handler := &AuthUserProjectionEventHandler{retriever: retriever, writer: writer, verifications: verifications, keys: keys}
 	global, err := eventstore.NewGlobalEventHandler(eventstore.GlobalEventHandlerConfig{
 		Subscriber:      subscriber,
 		Checkpointer:    checkpointer,
@@ -82,12 +85,21 @@ func (h *AuthUserProjectionEventHandler) handle(ctx context.Context, resolved ev
 }
 
 func (h *AuthUserProjectionEventHandler) handleUserRegistered(ctx context.Context, resolved eventstore.ResolvedEvent) error {
-	firstName, _ := resolved.Event.Data[UserRegisteredFirstNameField].(string)
-	lastName, _ := resolved.Event.Data[UserRegisteredLastNameField].(string)
+	protector := protectedpii.FromEnv()
+	userRegisteredID := stringValue(resolved.Event.Data[UserRegisteredIDField])
+	subjectKey, ok, err := h.keys.GetSubjectDataKey(ctx, userRegisteredID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return eventstore.ErrNotFound
+	}
+	firstName := protectedpii.MustDecryptEventStringWithDataKey(protector, subjectKey, resolved.Event.Data, UserRegisteredFirstNameField)
+	lastName := protectedpii.MustDecryptEventStringWithDataKey(protector, subjectKey, resolved.Event.Data, UserRegisteredLastNameField)
 	return h.writer.CreateRegisteredUserAccount(ctx, RegisterUserResult{
-		UserRegisteredID: stringValue(resolved.Event.Data[UserRegisteredIDField]),
-		Username:         stringValue(resolved.Event.Data[UserRegisteredUsernameField]),
-		Email:            stringValue(resolved.Event.Data[UserRegisteredEmailField]),
+		UserRegisteredID: userRegisteredID,
+		Username:         protectedpii.MustDecryptEventStringWithDataKey(protector, subjectKey, resolved.Event.Data, UserRegisteredUsernameField),
+		Email:            protectedpii.MustDecryptEventStringWithDataKey(protector, subjectKey, resolved.Event.Data, UserRegisteredEmailField),
 		FirstName:        firstName,
 		LastName:         lastName,
 		PasswordHash:     stringValue(resolved.Event.Data[UserRegisteredPasswordHashField]),
@@ -96,7 +108,14 @@ func (h *AuthUserProjectionEventHandler) handleUserRegistered(ctx context.Contex
 
 func (h *AuthUserProjectionEventHandler) handleUserNameChanged(ctx context.Context, resolved eventstore.ResolvedEvent) error {
 	userRegisteredID := stringValue(eventstore.Scope(resolved.Event.Data)["userRegisteredId"])
-	name := stringValue(resolved.Event.Data[UserNameChangedNameField])
+	subjectKey, ok, err := h.keys.GetSubjectDataKey(ctx, userRegisteredID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return eventstore.ErrNotFound
+	}
+	name := protectedpii.MustDecryptEventStringWithDataKey(protectedpii.FromEnv(), subjectKey, resolved.Event.Data, UserNameChangedNameField)
 	if userRegisteredID == "" || strings.TrimSpace(name) == "" {
 		return nil
 	}

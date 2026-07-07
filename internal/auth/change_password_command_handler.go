@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/oexza/go-orisun-datastar/internal/commandlimits"
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
 	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
 	"github.com/oexza/go-orisun-datastar/internal/views"
@@ -23,6 +24,9 @@ type PasswordCredentialReader interface {
 }
 
 func ChangePasswordCommandHandler(ctx context.Context, command ChangePasswordCommand, credentials PasswordCredentialReader, saver eventstore.Saver, retriever eventstore.Retriever) error {
+	if err := commandlimits.Assert(command); err != nil {
+		return err
+	}
 	if len(command.NewPassword) < 6 {
 		return errors.New("password must be at least 6 characters")
 	}

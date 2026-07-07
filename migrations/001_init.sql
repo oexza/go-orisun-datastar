@@ -70,6 +70,15 @@ CREATE TABLE IF NOT EXISTS auth_verification (
 
 CREATE INDEX IF NOT EXISTS verification_identifier_idx ON auth_verification (identifier);
 
+CREATE TABLE IF NOT EXISTS subject_pii_keys (
+    subject_id TEXT PRIMARY KEY,
+    encrypted_data_key TEXT NOT NULL,
+    encryption_nonce TEXT NOT NULL,
+    key_version TEXT NOT NULL,
+	created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+	updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS profile_stats (
     user_id TEXT PRIMARY KEY,
     name TEXT,

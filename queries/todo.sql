@@ -43,3 +43,7 @@ SET deleted_at = @deleted_at,
     last_event_prepare_position = @last_event_prepare_position,
     updated_at = @deleted_at
 WHERE todo_id = @todo_id;
+
+-- name: DeleteTodosByRegisteredID :exec
+DELETE FROM todo_items
+WHERE user_registered_id = @user_registered_id;

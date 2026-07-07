@@ -19,6 +19,8 @@ type Config struct {
 	OrisunAddress     string
 	OrisunBoundary    string
 	SessionSecret     string
+	PIIKeySecret      string
+	PIIBlindSecret    string
 	UploadDir         string
 	UploadBaseURL     string
 	UseSSLForPostgres bool
@@ -59,6 +61,8 @@ func Load() Config {
 		OrisunAddress:     env("ORISUN_HOST", "localhost") + ":" + env("ORISUN_PORT", "5006"),
 		OrisunBoundary:    env("ORISUN_GENERAL_BOUNDARY", "go_orisun_datastar"),
 		SessionSecret:     env("BETTER_AUTH_SECRET", "secret-key-that-should-be-very-secret"),
+		PIIKeySecret:      env("PII_KEY_ENCRYPTION_SECRET", "development-pii-key-encryption-secret-change-me"),
+		PIIBlindSecret:    env("PII_BLIND_INDEX_SECRET", "development-pii-blind-index-secret-change-me"),
 		UploadDir:         env("UPLOAD_DIR", "static/uploads"),
 		UploadBaseURL:     env("UPLOAD_BASE_URL", "/static/uploads"),
 		UseSSLForPostgres: useSSL,

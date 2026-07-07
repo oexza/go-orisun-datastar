@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 
+	"github.com/oexza/go-orisun-datastar/internal/commandlimits"
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
 	"github.com/oexza/go-orisun-datastar/internal/views"
 )
@@ -12,6 +13,12 @@ type AuthUserByIDReader interface {
 }
 
 func ValidateEmailVerificationOTPForUserCommandHandler(ctx context.Context, userID, code string, metadata CommandMetadata, users AuthUserByIDReader, saver eventstore.Saver, retriever eventstore.Retriever) error {
+	if err := commandlimits.Assert(struct {
+		UserID string
+		Code   string
+	}{UserID: userID, Code: code}); err != nil {
+		return err
+	}
 	user, err := users.UserByIDOrRegisteredID(ctx, userID)
 	if err != nil {
 		return err

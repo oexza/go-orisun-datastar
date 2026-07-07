@@ -22,15 +22,16 @@ type profileViewState struct {
 }
 
 func (s Server) profileRoutes(r chi.Router) {
-	r.Get("/profile", s.profilePage)
+	r.With(noCache).Get("/profile", s.profilePage)
 	r.Get("/profile/stream", s.profileStream)
-	r.Get("/profile/edit", s.profileEdit)
-	r.Get("/profile/settings", s.settings)
-	r.Post("/profile/bio", s.updateBio)
-	r.Post("/profile/avatar", s.uploadAvatar)
-	r.Post("/profile/header-image", s.uploadHeader)
-	r.Post("/user/name", s.updateName)
-	r.Post("/settings/change-password", s.changePassword)
+	r.With(noCache).Get("/profile/edit", s.profileEdit)
+	r.With(noCache).Get("/profile/settings", s.settings)
+	r.With(noCache).Post("/profile/bio", s.updateBio)
+	r.With(noCache).Post("/profile/avatar", s.uploadAvatar)
+	r.With(noCache).Post("/profile/header-image", s.uploadHeader)
+	r.With(noCache).Post("/user/name", s.updateName)
+	r.With(noCache).Post("/settings/change-password", s.changePassword)
+	r.With(noCache).Post("/settings/delete-account", s.deleteAccount)
 }
 
 func (s Server) profilePage(w http.ResponseWriter, r *http.Request) {
@@ -43,56 +44,27 @@ func (s Server) profilePage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) profileStream(w http.ResponseWriter, r *http.Request) {
+	setRequestAction(r, "profile.stream.connect", nil)
 	user := currentUser(r)
 	sse := newSSE(w, r)
 	ctx := r.Context()
 	key := viewstore.ProfileKey(s.sessionID(r), user.UserRegisteredID)
 
-	updates := make(chan struct{}, 1)
-	if err := s.refreshProfileViewState(ctx, key, user); err != nil {
-		_ = alert(sse, err.Error())
-		return
-	}
-
-	watcher, err := s.ViewStore.Watch(ctx, key, viewstore.WatchOptions{IgnoreDeletes: true})
-	if err != nil {
-		_ = alert(sse, err.Error())
-		return
-	}
-	defer watcher.Stop()
-
-	sub, err := s.Subscriber.Subscribe(ctx, profile.Channel(user.UserRegisteredID), func(context.Context, []byte) {
-		notifyOnce(updates)
+	err := streamViewStoreFatMorph[profileViewState](ctx, sse, viewStoreFatMorphConfig[profileViewState]{
+		Key:     key,
+		Store:   s.ViewStore,
+		Refresh: func(ctx context.Context) error { return s.refreshProfileViewState(ctx, key, user) },
+		Subscribe: func(ctx context.Context, notify func()) (closeableSubscription, error) {
+			return s.Subscriber.Subscribe(ctx, profile.Channel(user.UserRegisteredID), func(context.Context, []byte) {
+				notify()
+			})
+		},
+		Patch: func(sse *datastar.ServerSentEventGenerator, state profileViewState) error {
+			return sse.PatchElementTempl(views.ProfilePanel(state.User), datastar.WithSelector("#profile-panel"))
+		},
 	})
 	if err != nil {
 		_ = alert(sse, err.Error())
-		return
-	}
-	defer sub.Close()
-
-	notifyOnce(updates)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-updates:
-			if err := s.refreshProfileViewState(ctx, key, user); err != nil {
-				_ = alert(sse, err.Error())
-				return
-			}
-		case entry, ok := <-watcher.Updates():
-			if !ok {
-				return
-			}
-			var state profileViewState
-			if err := entry.JSON(&state); err != nil {
-				_ = alert(sse, err.Error())
-				return
-			}
-			if err := sse.PatchElementTempl(views.ProfilePanel(state.User), datastar.WithSelector("#profile-panel"), datastar.WithMode(datastar.ElementPatchModeInner)); err != nil {
-				return
-			}
-		}
 	}
 }
 
@@ -110,13 +82,14 @@ func (s Server) settings(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) updateBio(w http.ResponseWriter, r *http.Request) {
+	setRequestAction(r, "profile.update_bio", nil)
 	_ = r.ParseForm()
 	user := currentUser(r)
 	err := profile.UpdateProfileBioCommandHandler(r.Context(), profile.UpdateProfileBioCommand{
 		User:     user,
 		Bio:      r.FormValue("bio"),
 		Metadata: eventstore.HTTPCommandMetadata(r, user.UserRegisteredID),
-	}, s.EventSaver, s.EventRetriever)
+	}, s.EventSaver, s.EventRetriever, s.PIIKeys)
 	if err != nil {
 		patchTempl(w, r, views.ProfileEditPanel(user, map[string]string{"bio": err.Error()}), datastar.WithSelectorID("profile-edit-page"))
 		return
@@ -125,10 +98,12 @@ func (s Server) updateBio(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) uploadAvatar(w http.ResponseWriter, r *http.Request) {
+	setRequestAction(r, "profile.upload_avatar", nil)
 	s.uploadImage(w, r, false)
 }
 
 func (s Server) uploadHeader(w http.ResponseWriter, r *http.Request) {
+	setRequestAction(r, "profile.upload_header", nil)
 	s.uploadImage(w, r, true)
 }
 
@@ -153,13 +128,14 @@ func (s Server) uploadImage(w http.ResponseWriter, r *http.Request, header bool)
 }
 
 func (s Server) updateName(w http.ResponseWriter, r *http.Request) {
+	setRequestAction(r, "user.update_name", nil)
 	_ = r.ParseForm()
 	user := currentUser(r)
 	_, err := auth.UpdateUserNameCommandHandler(r.Context(), auth.UpdateUserNameCommand{
 		User:     user,
 		Name:     r.FormValue("name"),
 		Metadata: eventstore.HTTPCommandMetadata(r, user.UserRegisteredID),
-	}, s.EventSaver, s.EventRetriever)
+	}, s.EventSaver, s.EventRetriever, s.PIIKeys)
 	actionSSE(w, r, func(sse *datastar.ServerSentEventGenerator) error {
 		if err != nil {
 			return alert(sse, err.Error())
@@ -169,6 +145,7 @@ func (s Server) updateName(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) changePassword(w http.ResponseWriter, r *http.Request) {
+	setRequestAction(r, "settings.change_password", nil)
 	_ = r.ParseForm()
 	user := currentUser(r)
 	err := auth.ChangePasswordCommandHandler(r.Context(), auth.ChangePasswordCommand{
@@ -182,6 +159,24 @@ func (s Server) changePassword(w http.ResponseWriter, r *http.Request) {
 			return alert(sse, err.Error())
 		}
 		return sse.Redirect("/profile/settings")
+	})
+}
+
+func (s Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
+	setRequestAction(r, "settings.delete_account", nil)
+	_ = r.ParseForm()
+	user := currentUser(r)
+	_, err := auth.RequestAccountDeletionCommandHandler(r.Context(), auth.RequestAccountDeletionCommand{
+		User:     user,
+		Password: r.FormValue("password"),
+		Metadata: eventstore.HTTPCommandMetadata(r, user.UserRegisteredID),
+	}, s.PasswordCredentials, s.EventSaver, s.EventRetriever)
+	actionSSE(w, r, func(sse *datastar.ServerSentEventGenerator) error {
+		if err != nil {
+			return alert(sse, err.Error())
+		}
+		s.Sessions.ClearSessionCookie(w)
+		return sse.Redirect("/login")
 	})
 }
 

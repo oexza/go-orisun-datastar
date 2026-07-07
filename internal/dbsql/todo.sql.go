@@ -64,6 +64,16 @@ func (q *Queries) DeleteTodo(ctx context.Context, arg DeleteTodoParams) error {
 	return err
 }
 
+const deleteTodosByRegisteredID = `-- name: DeleteTodosByRegisteredID :exec
+DELETE FROM todo_items
+WHERE user_registered_id = $1
+`
+
+func (q *Queries) DeleteTodosByRegisteredID(ctx context.Context, userRegisteredID string) error {
+	_, err := q.db.Exec(ctx, deleteTodosByRegisteredID, userRegisteredID)
+	return err
+}
+
 const insertCreatedTodo = `-- name: InsertCreatedTodo :exec
 INSERT INTO todo_items (todo_id, user_registered_id, title, completed, completed_at, deleted_at, last_event_commit_position, last_event_prepare_position, created_at, updated_at)
 VALUES ($1, $2, $3, false, null, null, $4, $5, $6, $6)

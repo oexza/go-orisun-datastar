@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/oexza/go-orisun-datastar/internal/commandlimits"
 	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
 
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
@@ -21,6 +22,9 @@ type ReopenTodoResult struct {
 }
 
 func ReopenTodoCommandHandler(ctx context.Context, command ReopenTodoCommand, saver eventstore.Saver, retriever eventstore.Retriever) (ReopenTodoResult, error) {
+	if err := commandlimits.Assert(command); err != nil {
+		return ReopenTodoResult{}, err
+	}
 	model, err := loadReopenTodoContext(ctx, retriever, command.TodoID, command.UserRegisteredID)
 	if err != nil {
 		return ReopenTodoResult{}, err

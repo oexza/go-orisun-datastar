@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/oexza/go-orisun-datastar/internal/commandlimits"
 	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
 
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
@@ -21,6 +22,9 @@ type CompleteTodoResult struct {
 }
 
 func CompleteTodoCommandHandler(ctx context.Context, command CompleteTodoCommand, saver eventstore.Saver, retriever eventstore.Retriever) (CompleteTodoResult, error) {
+	if err := commandlimits.Assert(command); err != nil {
+		return CompleteTodoResult{}, err
+	}
 	model, err := loadCompleteTodoContext(ctx, retriever, command.TodoID, command.UserRegisteredID)
 	if err != nil {
 		return CompleteTodoResult{}, err

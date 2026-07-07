@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/oexza/go-orisun-datastar/internal/commandlimits"
 	"github.com/oexza/go-orisun-datastar/internal/dbsql"
 	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
 	"github.com/oexza/go-orisun-datastar/internal/views"
@@ -33,6 +34,12 @@ func NewSessionManager(db *pgxpool.Pool, users *AuthUserStore, secureCookie bool
 }
 
 func (s *SessionManager) Login(ctx context.Context, emailAddress, password string) (views.User, string, error) {
+	if err := commandlimits.Assert(struct {
+		EmailAddress string
+		Password     string
+	}{EmailAddress: emailAddress, Password: password}); err != nil {
+		return views.User{}, "", err
+	}
 	user, hash, err := s.users.UserByEmailWithPassword(ctx, strings.ToLower(strings.TrimSpace(emailAddress)))
 	if err != nil {
 		return views.User{}, "", errors.New("invalid email or password")

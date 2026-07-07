@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/oexza/go-orisun-datastar/internal/commandlimits"
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
 	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
 	"github.com/oexza/go-orisun-datastar/internal/views"
@@ -25,15 +26,18 @@ type PasswordResetUserReader interface {
 	UserByEmailWithPassword(ctx context.Context, emailAddress string) (views.User, string, error)
 }
 
-func RequestPasswordResetCommandHandler(ctx context.Context, command RequestPasswordResetCommand, users PasswordResetUserReader, saver eventstore.Saver, retriever eventstore.Retriever) (RequestPasswordResetResult, error) {
+func RequestPasswordResetCommandHandler(ctx context.Context, command RequestPasswordResetCommand, users PasswordResetUserReader, saver eventstore.Saver, retriever eventstore.Retriever, keys SubjectPiiKeyPort) (RequestPasswordResetResult, error) {
+	if err := commandlimits.Assert(command); err != nil {
+		return RequestPasswordResetResult{}, err
+	}
 	user, _, err := users.UserByEmailWithPassword(ctx, strings.ToLower(strings.TrimSpace(command.EmailAddress)))
 	if err != nil {
 		return RequestPasswordResetResult{}, nil
 	}
-	return requestPasswordReset(ctx, user, command.Metadata, saver, retriever)
+	return requestPasswordReset(ctx, user, command.Metadata, saver, retriever, keys)
 }
 
-func requestPasswordReset(ctx context.Context, user views.User, metadata CommandMetadata, saver eventstore.Saver, retriever eventstore.Retriever) (RequestPasswordResetResult, error) {
+func requestPasswordReset(ctx context.Context, user views.User, metadata CommandMetadata, saver eventstore.Saver, retriever eventstore.Retriever, keys SubjectPiiKeyPort) (RequestPasswordResetResult, error) {
 	model, err := loadRequestPasswordResetContext(ctx, user, retriever)
 	if err != nil {
 		return RequestPasswordResetResult{}, err
@@ -45,7 +49,14 @@ func requestPasswordReset(ctx context.Context, user views.User, metadata Command
 	}
 	requestID := uuidv7.NewString()
 	expiresAt := time.Now().Add(30 * time.Minute)
-	event := NewPasswordResetRequestedEvent(requestID, user.Email, token, expiresAt, user.UserRegisteredID, nil)
+	subjectKey, ok, err := keys.GetSubjectDataKey(ctx, user.UserRegisteredID)
+	if err != nil {
+		return RequestPasswordResetResult{}, err
+	}
+	if !ok {
+		return RequestPasswordResetResult{}, eventstore.ErrNotFound
+	}
+	event := NewPasswordResetRequestedEvent(requestID, user.Email, token, expiresAt, user.UserRegisteredID, subjectKey, nil)
 	if _, err := eventstore.SaveCommandEvents(ctx, saver, metadata, []eventstore.DomainEvent{event}, model.position, model.events, model.query); err != nil {
 		return RequestPasswordResetResult{}, err
 	}

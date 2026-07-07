@@ -20,6 +20,7 @@ type GlobalEventHandler struct {
 	logger          *slog.Logger
 	handleEvent     HandleResolvedEvent
 	maxEventRetries int
+	metrics         EventHandlerMetricsSink
 
 	mu     sync.Mutex
 	cancel context.CancelFunc
@@ -34,6 +35,7 @@ type GlobalEventHandlerConfig struct {
 	Logger          *slog.Logger
 	MaxEventRetries int
 	HandleEvent     HandleResolvedEvent
+	Metrics         EventHandlerMetricsSink
 }
 
 func NewGlobalEventHandler(config GlobalEventHandlerConfig) (*GlobalEventHandler, error) {
@@ -58,6 +60,12 @@ func NewGlobalEventHandler(config GlobalEventHandlerConfig) (*GlobalEventHandler
 	if config.MaxEventRetries == 0 {
 		config.MaxEventRetries = -1
 	}
+	if config.Metrics == nil {
+		config.Metrics = DefaultEventHandlerMetrics
+	}
+	if config.Metrics == nil {
+		config.Metrics = noopEventHandlerMetrics{}
+	}
 	return &GlobalEventHandler{
 		subscriber:      config.Subscriber,
 		checkpointer:    config.Checkpointer,
@@ -66,6 +74,7 @@ func NewGlobalEventHandler(config GlobalEventHandlerConfig) (*GlobalEventHandler
 		logger:          config.Logger,
 		handleEvent:     config.HandleEvent,
 		maxEventRetries: config.MaxEventRetries,
+		metrics:         config.Metrics,
 	}, nil
 }
 
@@ -97,6 +106,7 @@ func (h *GlobalEventHandler) StopSubscribing() {
 		h.logger.Info("stopping event handler subscription", "handler", h.name)
 		cancel()
 		h.wg.Wait()
+		h.metrics.HandlerStopped(h.name)
 	}
 }
 
@@ -118,6 +128,7 @@ func (h *GlobalEventHandler) run(ctx context.Context) {
 		}
 
 		h.logger.Info("starting event handler subscription", "handler", h.name, "commit", position.Commit, "prepare", position.Prepare, "attempt", attempt+1)
+		h.metrics.HandlerStarted(h.name, position)
 		err = h.subscriber.SubscribeToEvents(ctx, h.name, position, h.query, func(ctx context.Context, event ResolvedEvent) error {
 			if err := h.retryEventProcessing(ctx, event, 0); err != nil {
 				return err
@@ -145,10 +156,12 @@ func (h *GlobalEventHandler) retryEventProcessing(ctx context.Context, event Res
 		err := h.handleEvent(ctx, event)
 		if err == nil {
 			h.logger.Info("event handler processed event", "handler", h.name, "eventId", event.Event.EventID, "eventType", event.Event.EventType, "retryCount", retryCount)
+			h.metrics.EventProcessed(h.name, event)
 			return nil
 		}
 
 		h.logger.Error("event handler failed processing event", "handler", h.name, "eventId", event.Event.EventID, "eventType", event.Event.EventType, "retryCount", retryCount, "err", err)
+		h.metrics.EventFailed(h.name, event, err)
 		if h.maxEventRetries != -1 && retryCount >= h.maxEventRetries-1 {
 			return err
 		}
@@ -164,6 +177,7 @@ func (h *GlobalEventHandler) retryCheckpointUpdate(ctx context.Context, position
 		err := h.checkpointer.UpdateCheckpoint(ctx, h.name, position)
 		if err == nil {
 			h.logger.Info("event handler checkpoint updated", "handler", h.name, "commit", position.Commit, "prepare", position.Prepare, "retryCount", retryCount)
+			h.metrics.CheckpointUpdated(h.name, position)
 			return nil
 		}
 

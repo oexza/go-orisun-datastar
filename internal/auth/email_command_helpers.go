@@ -9,17 +9,38 @@ func userRegisteredQuery(userRegisteredID string) eventstore.Query {
 	}}}}
 }
 
-func userRegisteredByUsernameOrEmailQuery(username, email string) eventstore.Query {
+func userRegisteredByUsernameOrEmailQuery(usernameHash, emailHash string) eventstore.Query {
 	return eventstore.Query{Criteria: []eventstore.Criterion{
 		{Tags: []eventstore.Tag{
 			{Key: "eventType", Value: UserRegistered},
-			{Key: UserRegisteredUsernameField, Value: username},
+			{Key: UserRegisteredUsernameHashField, Value: usernameHash},
 		}},
 		{Tags: []eventstore.Tag{
 			{Key: "eventType", Value: UserRegistered},
-			{Key: UserRegisteredEmailField, Value: email},
+			{Key: UserRegisteredEmailHashField, Value: emailHash},
 		}},
 	}}
+}
+
+func accountDeletionRequestedByUserQuery(userRegisteredID string) eventstore.Query {
+	return eventstore.Query{Criteria: []eventstore.Criterion{{Tags: []eventstore.Tag{
+		{Key: "eventType", Value: AccountDeletionRequested},
+		{Key: ScopeUserRegisteredIDField, Value: userRegisteredID},
+	}}}}
+}
+
+func accountDeletedByRequestQuery(requestID string) eventstore.Query {
+	return eventstore.Query{Criteria: []eventstore.Criterion{{Tags: []eventstore.Tag{
+		{Key: "eventType", Value: AccountDeleted},
+		{Key: "scope.accountDeletionRequestedId", Value: requestID},
+	}}}}
+}
+
+func accountDeletedByUserQuery(userRegisteredID string) eventstore.Query {
+	return eventstore.Query{Criteria: []eventstore.Criterion{{Tags: []eventstore.Tag{
+		{Key: "eventType", Value: AccountDeleted},
+		{Key: ScopeUserRegisteredIDField, Value: userRegisteredID},
+	}}}}
 }
 
 func emailVerificationOTPGeneratedQuery(otpID string) eventstore.Query {

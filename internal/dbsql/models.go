@@ -84,6 +84,15 @@ type ProjectorCheckpoint struct {
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
+type SubjectPiiKey struct {
+	SubjectID        string             `json:"subject_id"`
+	EncryptedDataKey string             `json:"encrypted_data_key"`
+	EncryptionNonce  string             `json:"encryption_nonce"`
+	KeyVersion       string             `json:"key_version"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
 type TodoItem struct {
 	TodoID                   string             `json:"todo_id"`
 	UserRegisteredID         string             `json:"user_registered_id"`

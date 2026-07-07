@@ -9,6 +9,16 @@ import (
 	"context"
 )
 
+const deleteProfileByRegisteredID = `-- name: DeleteProfileByRegisteredID :exec
+DELETE FROM profile_stats
+WHERE user_id = $1
+`
+
+func (q *Queries) DeleteProfileByRegisteredID(ctx context.Context, userRegisteredID string) error {
+	_, err := q.db.Exec(ctx, deleteProfileByRegisteredID, userRegisteredID)
+	return err
+}
+
 const profileUser = `-- name: ProfileUser :one
 SELECT user_id,
        coalesce(name, '') AS name,

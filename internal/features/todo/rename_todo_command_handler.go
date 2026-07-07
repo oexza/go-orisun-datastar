@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/oexza/go-orisun-datastar/internal/commandlimits"
 	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
 
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
@@ -22,6 +23,9 @@ type RenameTodoResult struct {
 }
 
 func RenameTodoCommandHandler(ctx context.Context, command RenameTodoCommand, saver eventstore.Saver, retriever eventstore.Retriever) (RenameTodoResult, error) {
+	if err := commandlimits.Assert(command); err != nil {
+		return RenameTodoResult{}, err
+	}
 	title, err := validateTitle(command.Title)
 	if err != nil {
 		return RenameTodoResult{}, err

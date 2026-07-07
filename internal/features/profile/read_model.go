@@ -5,9 +5,11 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/oexza/go-orisun-datastar/internal/auth"
 
 	"github.com/oexza/go-orisun-datastar/internal/dbsql"
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
+	"github.com/oexza/go-orisun-datastar/internal/protectedpii"
 	"github.com/oexza/go-orisun-datastar/internal/views"
 )
 
@@ -41,13 +43,21 @@ func (m *ReadModel) User(ctx context.Context, userRegisteredID string) (views.Us
 	}, nil
 }
 
-func (m *ReadModel) UpsertRegisteredUser(ctx context.Context, resolved eventstore.ResolvedEvent) error {
+func (m *ReadModel) UpsertRegisteredUser(ctx context.Context, resolved eventstore.ResolvedEvent, keys auth.SubjectPiiKeyPort) error {
 	data := resolved.Event.Data
 	userRegisteredID, _ := data["userRegisteredId"].(string)
-	username, _ := data["username"].(string)
-	emailAddress, _ := data["email"].(string)
-	firstName, _ := data["firstName"].(string)
-	lastName, _ := data["lastName"].(string)
+	protector := protectedpii.FromEnv()
+	subjectKey, ok, err := keys.GetSubjectDataKey(ctx, userRegisteredID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return eventstore.ErrNotFound
+	}
+	username := protectedpii.MustDecryptEventStringWithDataKey(protector, subjectKey, data, "username")
+	emailAddress := protectedpii.MustDecryptEventStringWithDataKey(protector, subjectKey, data, "email")
+	firstName := protectedpii.MustDecryptEventStringWithDataKey(protector, subjectKey, data, "firstName")
+	lastName := protectedpii.MustDecryptEventStringWithDataKey(protector, subjectKey, data, "lastName")
 	name := strings.TrimSpace(firstName + " " + lastName)
 	return m.queries.UpsertRegisteredProfileUser(ctx, dbsql.UpsertRegisteredProfileUserParams{
 		UserID:                   userRegisteredID,
@@ -59,9 +69,16 @@ func (m *ReadModel) UpsertRegisteredUser(ctx context.Context, resolved eventstor
 	})
 }
 
-func (m *ReadModel) UpdateName(ctx context.Context, resolved eventstore.ResolvedEvent) error {
+func (m *ReadModel) UpdateName(ctx context.Context, resolved eventstore.ResolvedEvent, keys auth.SubjectPiiKeyPort) error {
 	userRegisteredID, _ := eventstore.Scope(resolved.Event.Data)["userRegisteredId"].(string)
-	name, _ := resolved.Event.Data["name"].(string)
+	subjectKey, ok, err := keys.GetSubjectDataKey(ctx, userRegisteredID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return eventstore.ErrNotFound
+	}
+	name := protectedpii.MustDecryptEventStringWithDataKey(protectedpii.FromEnv(), subjectKey, resolved.Event.Data, "name")
 	return m.queries.UpsertProfileName(ctx, dbsql.UpsertProfileNameParams{
 		UserID:                   userRegisteredID,
 		Name:                     stringPtr(name),
@@ -70,9 +87,16 @@ func (m *ReadModel) UpdateName(ctx context.Context, resolved eventstore.Resolved
 	})
 }
 
-func (m *ReadModel) UpdateBio(ctx context.Context, resolved eventstore.ResolvedEvent) error {
+func (m *ReadModel) UpdateBio(ctx context.Context, resolved eventstore.ResolvedEvent, keys auth.SubjectPiiKeyPort) error {
 	userRegisteredID, _ := eventstore.Scope(resolved.Event.Data)["userRegisteredId"].(string)
-	bio, _ := resolved.Event.Data["bio"].(string)
+	subjectKey, ok, err := keys.GetSubjectDataKey(ctx, userRegisteredID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return eventstore.ErrNotFound
+	}
+	bio := protectedpii.MustDecryptEventStringWithDataKey(protectedpii.FromEnv(), subjectKey, resolved.Event.Data, "bio")
 	return m.queries.UpsertProfileBio(ctx, dbsql.UpsertProfileBioParams{
 		UserID:                   userRegisteredID,
 		Bio:                      stringPtr(bio),

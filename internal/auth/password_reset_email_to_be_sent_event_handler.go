@@ -15,10 +15,11 @@ type PasswordResetEmailToBeSentEventHandler struct {
 	saver     eventstore.Saver
 	sender    EmailSender
 	appURL    string
+	keys      SubjectPiiKeyPort
 }
 
-func NewPasswordResetEmailToBeSentEventHandler(subscriber eventstore.Subscriber, checkpointer eventstore.Checkpointer, retriever eventstore.Retriever, saver eventstore.Saver, sender EmailSender, appURL string, logger *slog.Logger) (*PasswordResetEmailToBeSentEventHandler, error) {
-	handler := &PasswordResetEmailToBeSentEventHandler{retriever: retriever, saver: saver, sender: sender, appURL: appURL}
+func NewPasswordResetEmailToBeSentEventHandler(subscriber eventstore.Subscriber, checkpointer eventstore.Checkpointer, retriever eventstore.Retriever, saver eventstore.Saver, sender EmailSender, appURL string, keys SubjectPiiKeyPort, logger *slog.Logger) (*PasswordResetEmailToBeSentEventHandler, error) {
+	handler := &PasswordResetEmailToBeSentEventHandler{retriever: retriever, saver: saver, sender: sender, appURL: appURL, keys: keys}
 	global, err := eventstore.NewGlobalEventHandler(eventstore.GlobalEventHandlerConfig{
 		Subscriber:      subscriber,
 		Checkpointer:    checkpointer,
@@ -51,7 +52,7 @@ func (h *PasswordResetEmailToBeSentEventHandler) handle(ctx context.Context, res
 	return SendPasswordResetEmailCommandHandler(ctx, SendPasswordResetEmailCommand{
 		PasswordResetRequestedID: requestID,
 		Metadata:                 eventstore.EventHandlerCommandMetadata(PasswordResetEmailToBeSentEventHandlerName, resolved),
-	}, h.saver, h.retriever, h.sender, h.appURL)
+	}, h.saver, h.retriever, h.sender, h.appURL, h.keys)
 }
 
 func passwordResetEmailToBeSentEventHandlerQuery() eventstore.Query {

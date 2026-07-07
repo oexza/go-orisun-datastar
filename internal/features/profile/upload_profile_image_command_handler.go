@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/oexza/go-orisun-datastar/internal/commandlimits"
 	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
 
 	"github.com/oexza/go-orisun-datastar/internal/eventstore"
@@ -26,6 +27,9 @@ type UploadProfileImageResult struct {
 }
 
 func UploadProfileImageCommandHandler(ctx context.Context, command UploadProfileImageCommand, saver eventstore.Saver, retriever eventstore.Retriever, storage ObjectStore) (UploadProfileImageResult, error) {
+	if err := commandlimits.Assert(command); err != nil {
+		return UploadProfileImageResult{}, err
+	}
 	model, err := loadUploadProfileImageContext(ctx, command, retriever)
 	if err != nil {
 		return UploadProfileImageResult{}, err
