@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/oexza/Orisun/config"
 	"strings"
 	"time"
 
 	natsgo "github.com/nats-io/nats.go"
-	orisunconfig "github.com/oexza/Orisun/config"
 	orisunlog "github.com/oexza/Orisun/logging"
 	natsruntime "github.com/oexza/Orisun/nats"
 	orisunapi "github.com/oexza/Orisun/orisun"
@@ -38,7 +38,7 @@ type EmbeddedConfig struct {
 }
 
 func StartEmbeddedOrisun(ctx context.Context, cfg EmbeddedConfig) (*EmbeddedOrisun, error) {
-	appConfig, err := orisunconfig.LoadConfig()
+	appConfig, err := config.LoadConfig()
 	if err != nil {
 		return nil, err
 	}
