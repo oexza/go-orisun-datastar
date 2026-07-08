@@ -1,0 +1,129 @@
+package views
+
+templ TodosPage(user User, todos []Todo) {
+	@Base("Todos") {
+		{{ stats := todoStats(todos) }}
+		<main class="page app-page">
+			@AppNav(user, "todos")
+			<section class="dashboard-hero">
+				<div class="page-header">
+					<p class="eyebrow">Command center</p>
+					<h1 class="page-title">Todos</h1>
+					<p class="page-subtitle">A compact event-sourced workflow powered by Orisun projections and Datastar fragments.</p>
+				</div>
+				<div class="hero-snapshot" aria-label="Todo snapshot">
+					<div>
+						<span class="snapshot-label">Completion</span>
+						<strong>{ todoCompletionLabel(stats) }</strong>
+					</div>
+					<div class="snapshot-ring" style={ todoProgressCustomProperty(stats) }>
+						<span>{ todoCountLabel(stats.Active) }</span>
+					</div>
+					<p>{ todoCountLabel(stats.Active) } active, { todoCountLabel(stats.Completed) } complete</p>
+				</div>
+			</section>
+			<form class="todo-form" data-on:submit={ postFormSSE("/todos") } data-indicator="creatingTodo">
+				<span class="composer-mark" aria-hidden="true"></span>
+				<input class="input w-full" id="todo-title" name="title" data-bind:new-todo-title maxlength="160" required placeholder="Add a todo"/>
+				<button class="btn btn-primary" type="submit">Add</button>
+				@SseIndicator("creatingTodo")
+			</form>
+			<div data-init={ longRunningGetSSE("/todos/stream") }></div>
+			@TodoWorkspace(todos)
+		</main>
+	}
+}
+
+templ TodoWorkspace(todos []Todo) {
+	{{ stats := todoStats(todos) }}
+	<section id="todo-workspace">
+		<section class="todo-summary" aria-label="Todo summary">
+			<div class="todo-metric total">
+				<span>Total</span>
+				<strong>{ todoCountLabel(stats.Total) }</strong>
+			</div>
+			<div class="todo-metric active">
+				<span>Active</span>
+				<strong>{ todoCountLabel(stats.Active) }</strong>
+			</div>
+			<div class="todo-metric completed">
+				<span>Done</span>
+				<strong>{ todoCountLabel(stats.Completed) }</strong>
+			</div>
+			<div class="todo-progress" aria-label="Completion progress">
+				<div>
+					<span>Progress</span>
+					<strong>{ todoCompletionLabel(stats) }</strong>
+				</div>
+				<div class="todo-progress-track">
+					<div class="todo-progress-bar" style={ todoProgressStyle(stats) }></div>
+				</div>
+			</div>
+		</section>
+		<section class="todo-toolbar" aria-label="Todo bulk actions">
+			if stats.Active > 0 {
+				<form data-on:submit={ todoCompleteActiveSSE() }>
+					<button class="btn btn-sm btn-outline" type="submit">Complete active</button>
+				</form>
+			} else {
+				<button class="btn btn-sm btn-outline btn-disabled" type="button">Complete active</button>
+			}
+			if stats.Completed > 0 {
+				<form data-on:submit={ todoReopenCompletedSSE() }>
+					<button class="btn btn-sm btn-outline" type="submit">Reopen done</button>
+				</form>
+				<form data-on:submit={ todoClearCompletedSSE() }>
+					<button class="btn btn-sm btn-ghost text-error" type="submit">Clear done</button>
+				</form>
+			} else {
+				<button class="btn btn-sm btn-outline btn-disabled" type="button">Reopen done</button>
+				<button class="btn btn-sm btn-ghost btn-disabled" type="button">Clear done</button>
+			}
+		</section>
+		@TodoList(todos)
+	</section>
+}
+
+templ TodoList(todos []Todo) {
+	if len(todos) == 0 {
+		<div class="empty">
+			<h2>No todos yet</h2>
+			<p>Add the first item and the read model will update over SSE.</p>
+		</div>
+	} else {
+		<div class="todo-list">
+			for _, todo := range todos {
+				@TodoRow(todo)
+			}
+		</div>
+	}
+}
+
+templ TodoRow(todo Todo) {
+	{{ class := "todo-row" }}
+	if todo.Completed {
+		{{ class = "todo-row completed" }}
+	}
+	<article class={ class }>
+		<form data-on:submit={ todoToggleSSE(todo) }>
+			<button class={ "todo-check", templ.KV("checked", todo.Completed) } aria-label="toggle todo completion">
+			</button>
+		</form>
+		<form class="todo-title" data-on:submit={ todoRenameSSE(todo) }>
+			<input class="todo-title-input input input-ghost w-full" name="title" value={ todo.Title } maxlength="160" required/>
+			if todoTimeLabel(todo) != "" {
+				<span class="todo-meta">{ todoTimeLabel(todo) }</span>
+			}
+		</form>
+		<span class={ "todo-status", templ.KV("done", todo.Completed) }>
+			if todo.Completed {
+				Done
+			} else {
+				Active
+			}
+		</span>
+		<form data-on:submit={ todoDeleteSSE(todo) }>
+			<button class="btn btn-ghost btn-sm todo-delete" aria-label="Delete todo">Delete</button>
+		</form>
+	</article>
+}
