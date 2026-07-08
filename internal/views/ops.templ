@@ -1,0 +1,68 @@
+package views
+
+templ OpsDashboard(snapshot OpsDashboardSnapshot) {
+	@Base("Ops") {
+		<main class="page">
+			<section class="page-header">
+				<h1 class="page-title">Ops</h1>
+				<p class="page-subtitle">Event handler status and projection checkpoint health.</p>
+			</section>
+			<div data-init={ longRunningGetSSE("/ops/stream") }></div>
+			@OpsMetrics(snapshot)
+		</main>
+	}
+}
+
+templ OpsMetrics(snapshot OpsDashboardSnapshot) {
+	<section id="ops-metrics">
+		if len(snapshot.Handlers) == 0 {
+			<div class="empty">
+				<h2>No event handlers seen yet</h2>
+				<p>Start the app and handler metrics will appear here.</p>
+			</div>
+		} else {
+			<div class="overflow-x-auto">
+				<table class="table table-zebra">
+					<thead>
+						<tr>
+							<th>Handler</th>
+							<th>Status</th>
+							<th>Last event</th>
+							<th>Checkpoint</th>
+							<th>Processed</th>
+							<th>Failures</th>
+							<th>Updated</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, handler := range snapshot.Handlers {
+							<tr>
+								<td>
+									<div class="font-semibold">{ handler.Name }</div>
+									if handler.LastError != "" {
+										<div class="text-error text-sm">{ handler.LastError }</div>
+									}
+								</td>
+								<td>
+									if handler.Running {
+										<span class="badge badge-success">Running</span>
+									} else {
+										<span class="badge badge-outline">Stopped</span>
+									}
+								</td>
+								<td>
+									<div>{ handler.LastEventType }</div>
+									<div class="text-xs opacity-60">{ handler.LastEventID }</div>
+								</td>
+								<td>{ int64Label(handler.LastCheckpointCommit) }</td>
+								<td>{ int64Label(handler.ProcessedCount) }</td>
+								<td>{ int64Label(handler.FailureCount) }</td>
+								<td>{ handler.UpdatedAt }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	</section>
+}

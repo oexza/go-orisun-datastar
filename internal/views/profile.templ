@@ -1,0 +1,123 @@
+package views
+
+templ Profile(user User) {
+	@Base("Profile") {
+		<main class="page app-page">
+			@AppNav(user, "profile")
+			<div data-init={ longRunningGetSSE("/profile/stream") }></div>
+			@ProfilePanel(user)
+		</main>
+	}
+}
+
+templ ProfilePanel(user User) {
+	<section id="profile-panel" class="profile-hero">
+		if user.HeaderImageURL != "" {
+			<div class="profile-cover" style={ "background-image: linear-gradient(180deg, transparent, color-mix(in oklab, var(--color-neutral) 28%, transparent)), url('" + user.HeaderImageURL + "')" }></div>
+		} else {
+			<div class="profile-cover"></div>
+		}
+		<div class="profile-content">
+			if user.Image != "" {
+				<img class="profile-avatar" src={ user.Image } alt=""/>
+			} else {
+				<div class="profile-avatar profile-avatar-fallback">{ userInitials(user) }</div>
+			}
+			<div class="grid gap-1">
+				<h1 class="text-3xl font-bold">{ displayName(user) }</h1>
+				<p class="text-base-content/60">{ "@" + user.Username } · { user.Email }</p>
+			</div>
+			if user.Bio != "" {
+				<p class="max-w-2xl text-lg leading-relaxed">{ user.Bio }</p>
+			} else {
+				<p class="text-base-content/50">No bio yet.</p>
+			}
+			<div class="profile-facts" aria-label="Profile facts">
+				<span>{ user.Email }</span>
+				if user.EmailVerified {
+					<span>Verified email</span>
+				} else {
+					<span>Email pending</span>
+				}
+			</div>
+			<div>
+				<a class="btn btn-primary" href="/profile/edit">Edit profile</a>
+			</div>
+		</div>
+	</section>
+}
+
+templ ProfileEdit(user User, errors map[string]string) {
+	@Base("Edit profile") {
+		@ProfileEditPanel(user, errors)
+	}
+}
+
+templ ProfileEditPanel(user User, errors map[string]string) {
+	<main id="profile-edit-page" class="page app-page">
+		@AppNav(user, "profile")
+		<section class="page-header">
+			<p class="eyebrow">Profile studio</p>
+			<h1 class="page-title">Edit profile</h1>
+			<p class="page-subtitle">Update profile details through commands that publish profile events.</p>
+		</section>
+		<section class="settings-grid">
+			<form class="stack-form panel" method="post" action="/profile/bio" data-on:submit={ postFormSSE("/profile/bio") }>
+				<h2 class="text-lg font-bold">Bio</h2>
+				if errors != nil && errors["bio"] != "" {
+					<div class="alert alert-error alert-soft">{ errors["bio"] }</div>
+				}
+				<label class="grid gap-2">
+					<span class="font-semibold">Bio</span>
+					<textarea class="textarea min-h-32 w-full" name="bio" maxlength="280">{ user.Bio }</textarea>
+				</label>
+				<button class="btn btn-primary">Save bio</button>
+			</form>
+			<form class="stack-form panel" method="post" enctype="multipart/form-data" action="/profile/avatar">
+				<h2 class="text-lg font-bold">Avatar</h2>
+				<input class="file-input w-full" type="file" name="file" accept="image/*"/>
+				<button class="btn btn-neutral">Upload avatar</button>
+			</form>
+			<form class="stack-form panel" method="post" enctype="multipart/form-data" action="/profile/header-image">
+				<h2 class="text-lg font-bold">Header image</h2>
+				<input class="file-input w-full" type="file" name="file" accept="image/*"/>
+				<button class="btn btn-neutral">Upload header</button>
+			</form>
+		</section>
+	</main>
+}
+
+templ Settings(user User) {
+	@Base("Settings") {
+		<main class="page app-page">
+			@AppNav(user, "settings")
+			<section class="page-header">
+				<p class="eyebrow">Account controls</p>
+				<h1 class="page-title">Settings</h1>
+				<p class="page-subtitle">Account commands append events and update projections asynchronously.</p>
+			</section>
+			<section class="settings-grid">
+				<form class="stack-form panel" data-on:submit={ postFormSSE("/user/name") }>
+					<h2 class="text-lg font-bold">Display name</h2>
+					<label class="grid gap-2">
+						<span class="font-semibold">Name</span>
+						<input class="input w-full" name="name" value={ user.Name } required/>
+					</label>
+					<button class="btn btn-primary">Save name</button>
+				</form>
+				<form class="stack-form panel" data-on:submit={ postFormSSE("/settings/change-password") }>
+					<h2 class="text-lg font-bold">Password</h2>
+					<label class="grid gap-2">
+						<span class="font-semibold">Current password</span>
+						<input class="input w-full" name="currentPassword" type="password" required/>
+					</label>
+					<label class="grid gap-2">
+						<span class="font-semibold">New password</span>
+						<input class="input w-full" name="newPassword" type="password" required/>
+					</label>
+					<button class="btn btn-neutral">Change password</button>
+				</form>
+			</section>
+		</main>
+	}
+}

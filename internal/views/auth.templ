@@ -1,0 +1,79 @@
+package views
+
+templ Login(errors map[string]string) {
+	@Base("Login") {
+		@LoginForm(errors)
+	}
+}
+
+templ LoginForm(errors map[string]string) {
+	@AuthForm("/login", "Login", []Field{
+		{Name: "email", Type: "email", Label: "Email"},
+		{Name: "password", Type: "password", Label: "Password"},
+	}, errors) {
+		<a href="/register">Create account</a>
+		<a href="/forgot-password">Forgot password?</a>
+	}
+}
+
+templ Register(errors map[string]string) {
+	@Base("Register") {
+		@RegisterForm(errors)
+	}
+}
+
+templ RegisterForm(errors map[string]string) {
+	@AuthForm("/register", "Create account", []Field{
+		{Name: "username", Type: "text", Label: "Username"},
+		{Name: "email", Type: "email", Label: "Email"},
+		{Name: "password", Type: "password", Label: "Password"},
+		{Name: "firstName", Type: "text", Label: "First name"},
+		{Name: "lastName", Type: "text", Label: "Last name"},
+		{Name: "yearOfBirth", Type: "number", Label: "Year of birth"},
+	}, errors) {
+		<a href="/login">Sign in</a>
+	}
+}
+
+templ ForgotPassword(errors map[string]string) {
+	@Base("Forgot password") {
+		@ForgotPasswordForm(errors)
+	}
+}
+
+templ ForgotPasswordForm(errors map[string]string) {
+	@AuthForm("/forgot-password", "Forgot password", []Field{
+		{Name: "email", Type: "email", Label: "Email"},
+	}, errors) {
+		<a href="/login">Back to login</a>
+	}
+}
+
+templ ResetPassword(token string, errors map[string]string) {
+	@Base("Reset password") {
+		@ResetPasswordForm(token, errors)
+	}
+}
+
+templ ResetPasswordForm(token string, errors map[string]string) {
+	@AuthForm("/reset-password/" + token, "Reset password", []Field{
+		{Name: "password", Type: "password", Label: "New password"},
+	}, errors) {
+	}
+}
+
+templ ValidateEmail(userID string, errors map[string]string) {
+	@Base("Validate email") {
+		@ValidateEmailForm(userID, errors)
+	}
+}
+
+templ ValidateEmailForm(userID string, errors map[string]string) {
+	@AuthForm("/register/" + userID + "/validate-email", "Validate email", []Field{
+		{Name: "otp", Type: "text", Label: "Verification code"},
+	}, errors) {
+		<form class="w-full" data-on:submit={ sendValidationOTPSSE(userID) }>
+			<button class="btn btn-outline w-full" type="submit">Send new code</button>
+		</form>
+	}
+}
