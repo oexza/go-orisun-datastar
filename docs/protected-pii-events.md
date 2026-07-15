@@ -16,5 +16,5 @@ Each registered user has a subject data key in `subject_pii_keys`. The key is en
 Account deletion follows this event flow:
 
 1. `AccountDeletionRequested` records the user intent after password verification.
-2. `account_deletion_event_handler` deletes SQLite read-model/auth data, removes known local profile media objects, and destroys the subject key.
+2. `account_deletion_event_handler` deletes PostgreSQL read-model/auth data, removes known local profile media objects, and destroys the subject key.
 3. `AccountDeleted` records completion.
