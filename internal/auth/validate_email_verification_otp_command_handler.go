@@ -87,12 +87,13 @@ func loadValidateEmailVerificationOTPContext(ctx context.Context, command Valida
 	userQuery := userRegisteredQuery(command.User.UserRegisteredID)
 
 	var (
-		events []eventstore.ResolvedEvent
-		latest eventstore.LatestByCriteriaResult
-		otp    latestOTP
-		query  eventstore.Query
-		otpID  string
-		stable bool
+		events     []eventstore.ResolvedEvent
+		allFetched []eventstore.ResolvedEvent
+		latest     eventstore.LatestByCriteriaResult
+		otp        latestOTP
+		query      eventstore.Query
+		otpID      string
+		stable     bool
 	)
 	for range 5 {
 		validationQuery := emailVerificationOTPValidatedQuery(otpID)
@@ -103,6 +104,7 @@ func loadValidateEmailVerificationOTPContext(ctx context.Context, command Valida
 			return nil, err
 		}
 		events = eventstore.EventsFromLatest(latest.Results)
+		allFetched = append(allFetched, events...)
 		otp = latestEmailVerificationOTP(events)
 		if otp.id == otpID || otp.id == "" {
 			stable = true
@@ -119,7 +121,7 @@ func loadValidateEmailVerificationOTPContext(ctx context.Context, command Valida
 		code:      otp.code,
 		expiresAt: otp.expiresAt,
 		position:  latest.ContextPosition,
-		events:    events,
+		events:    allFetched,
 		query:     query,
 	}
 	for _, event := range events {
