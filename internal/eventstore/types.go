@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"reflect"
 	"sort"
 )
 
@@ -157,30 +156,4 @@ func EventsFromLatest(results []LatestCriterionResult) []ResolvedEvent {
 		return left.Prepare < right.Prepare
 	})
 	return events
-}
-
-func MergeScope(events []ResolvedEvent, target DomainEvent) (DomainEvent, error) {
-	if target.Data == nil {
-		target.Data = map[string]any{}
-	}
-	targetScope := Scope(target.Data)
-	sortedEvents := append([]ResolvedEvent(nil), events...)
-	sort.SliceStable(sortedEvents, func(i, j int) bool {
-		left := sortedEvents[i].Position
-		right := sortedEvents[j].Position
-		if left.Commit != right.Commit {
-			return left.Commit < right.Commit
-		}
-		return left.Prepare < right.Prepare
-	})
-	for _, resolved := range sortedEvents {
-		for key, value := range Scope(resolved.Event.Data) {
-			if existing, ok := targetScope[key]; ok && !reflect.DeepEqual(existing, value) {
-				return target, ErrConflict
-			}
-			targetScope[key] = value
-		}
-	}
-	target.Data["scope"] = targetScope
-	return target, nil
 }

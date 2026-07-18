@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/oexza/Orisun/config"
+	"sort"
 	"strings"
 	"time"
 
 	natsgo "github.com/nats-io/nats.go"
+	"github.com/oexza/Orisun/config"
 	orisunlog "github.com/oexza/Orisun/logging"
 	natsruntime "github.com/oexza/Orisun/nats"
 	orisunapi "github.com/oexza/Orisun/orisun"
@@ -147,17 +148,14 @@ func (s *EmbeddedOrisun) NATSConnection() *natsgo.Conn {
 func (s *EmbeddedOrisun) SaveEvents(ctx context.Context, events []DomainEvent, expected Position, scopeEvents []ResolvedEvent, subset Query) (WriteResult, error) {
 	toSave := make([]orisunapi.EventWithMapTags, 0, len(events))
 	for _, event := range events {
-		merged, err := MergeScope(scopeEvents, event)
-		if err != nil {
-			return WriteResult{}, err
-		}
-		data := flattenMap(merged.Data)
-		data["eventType"] = merged.EventType
+		event = withScopeEventIDs(event, scopeEvents)
+		data := flattenMap(event.Data)
+		data["eventType"] = event.EventType
 		toSave = append(toSave, orisunapi.EventWithMapTags{
-			EventId:   merged.EventID,
-			EventType: merged.EventType,
+			EventId:   event.EventID,
+			EventType: event.EventType,
 			Data:      data,
-			Metadata:  merged.Metadata,
+			Metadata:  event.Metadata,
 		})
 	}
 	position := toOrisunPosition(expected)
@@ -166,6 +164,37 @@ func (s *EmbeddedOrisun) SaveEvents(ctx context.Context, events []DomainEvent, e
 		return WriteResult{}, err
 	}
 	return WriteResult{Position: fromOrisunPosition(saved)}, nil
+}
+
+func withScopeEventIDs(event DomainEvent, scopeEvents []ResolvedEvent) DomainEvent {
+	sortedEvents := append([]ResolvedEvent(nil), scopeEvents...)
+	sort.SliceStable(sortedEvents, func(i, j int) bool {
+		left := sortedEvents[i].Position
+		right := sortedEvents[j].Position
+		if left.Commit != right.Commit {
+			return left.Commit < right.Commit
+		}
+		return left.Prepare < right.Prepare
+	})
+
+	ids := make([]string, 0, len(sortedEvents))
+	seen := make(map[string]struct{}, len(sortedEvents))
+	for _, resolved := range sortedEvents {
+		id := resolved.Event.EventID
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+
+	metadata := make(map[string]any, len(event.Metadata)+1)
+	for key, value := range event.Metadata {
+		metadata[key] = value
+	}
+	metadata["scope_event_ids"] = ids
+	event.Metadata = metadata
+	return event
 }
 
 func (s *EmbeddedOrisun) GetEvents(ctx context.Context, from Position, count int, direction Direction, query Query) ([]ResolvedEvent, error) {
