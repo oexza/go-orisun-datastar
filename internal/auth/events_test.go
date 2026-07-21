@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oexza/go-orisun-datastar/internal/protectedpii"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/protectedpii"
 )
 
 func TestPasswordResetCompletedEventMatchesFrasesShape(t *testing.T) {

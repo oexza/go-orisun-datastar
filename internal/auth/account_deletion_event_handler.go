@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/oexza/go-orisun-datastar/internal/eventstore"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/eventstore"
 )
 
 const AccountDeletionEventHandlerName = "account_deletion_event_handler"

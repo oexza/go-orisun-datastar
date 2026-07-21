@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/oexza/go-orisun-datastar/internal/auth"
-	"github.com/oexza/go-orisun-datastar/internal/eventstore"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/auth"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/eventstore"
 )
 
 const ProfileReadModelEventHandlerName = "profile_read_model_event_handler"
@@ -82,11 +82,16 @@ func (h *ReadModelEventHandler) handle(ctx context.Context, resolved eventstore.
 }
 
 func readModelEventHandlerQuery() eventstore.Query {
-	return eventstore.Query{Criteria: []eventstore.Criterion{
-		{Tags: []eventstore.Tag{{Key: "eventType", Value: userRegistered}}},
-		{Tags: []eventstore.Tag{{Key: "eventType", Value: userNameChanged}}},
-		{Tags: []eventstore.Tag{{Key: "eventType", Value: ProfileBioUpdated}}},
-		{Tags: []eventstore.Tag{{Key: "eventType", Value: ProfileImageUploaded}}},
-		{Tags: []eventstore.Tag{{Key: "eventType", Value: ProfileHeaderImageUploaded}}},
-	}}
+	eventTypes := []string{
+		userRegistered,
+		userNameChanged,
+		ProfileBioUpdated,
+		ProfileImageUploaded,
+		ProfileHeaderImageUploaded,
+	}
+	criteria := make([]eventstore.Criterion, 0, len(eventTypes))
+	for _, eventType := range eventTypes {
+		criteria = append(criteria, eventstore.Criterion{Tags: []eventstore.Tag{{Key: "eventType", Value: eventType}}})
+	}
+	return eventstore.Query{Criteria: criteria}
 }

@@ -3,7 +3,7 @@ package todo
 import (
 	"time"
 
-	"github.com/oexza/go-orisun-datastar/internal/eventstore"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/eventstore"
 )
 
 const (

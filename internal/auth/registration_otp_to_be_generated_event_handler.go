@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/oexza/go-orisun-datastar/internal/eventstore"
-	"github.com/oexza/go-orisun-datastar/internal/views"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/eventstore"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/views"
 )
 
 const RegistrationOTPToBeGeneratedEventHandlerName = "todo_registration_otp_to_be_generated_event_handler"

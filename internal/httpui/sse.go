@@ -7,7 +7,7 @@ import (
 	"github.com/a-h/templ"
 	"github.com/starfederation/datastar-go/datastar"
 
-	"github.com/oexza/go-orisun-datastar/internal/viewstore"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/viewstore"
 )
 
 func writeSSE(w http.ResponseWriter, r *http.Request, fn func(*datastar.ServerSentEventGenerator) error) {

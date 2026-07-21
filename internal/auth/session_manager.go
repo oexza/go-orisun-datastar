@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/oexza/go-orisun-datastar/internal/appdb"
-	"github.com/oexza/go-orisun-datastar/internal/commandlimits"
-	"github.com/oexza/go-orisun-datastar/internal/dbsql"
-	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
-	"github.com/oexza/go-orisun-datastar/internal/views"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/appdb"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/commandlimits"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/dbsql"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/uuidv7"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/views"
 	"golang.org/x/crypto/bcrypt"
 	"zombiezen.com/go/sqlite"
 )

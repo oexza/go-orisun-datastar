@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oexza/go-orisun-datastar/internal/eventstore"
-	"github.com/oexza/go-orisun-datastar/internal/views"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/eventstore"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/views"
 )
 
 func TestRenameTodoCommandSkipsUnchangedTitle(t *testing.T) {

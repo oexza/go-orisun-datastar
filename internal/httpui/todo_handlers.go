@@ -7,10 +7,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/starfederation/datastar-go/datastar"
 
-	"github.com/oexza/go-orisun-datastar/internal/eventstore"
-	"github.com/oexza/go-orisun-datastar/internal/features/todo"
-	"github.com/oexza/go-orisun-datastar/internal/views"
-	"github.com/oexza/go-orisun-datastar/internal/viewstore"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/eventstore"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/features/todo"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/views"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/viewstore"
 )
 
 type todoListViewState struct {

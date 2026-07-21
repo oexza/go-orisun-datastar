@@ -6,9 +6,9 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/oexza/go-orisun-datastar/internal/appdb"
-	"github.com/oexza/go-orisun-datastar/internal/dbsql"
-	"github.com/oexza/go-orisun-datastar/internal/views"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/appdb"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/dbsql"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/views"
 )
 
 func userFromSessionRow(row *dbsql.UserBySessionTokenRes) (views.User, error) {

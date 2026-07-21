@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/oexza/go-orisun-datastar/internal/eventstore"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/eventstore"
 )
 
 const EmailValidationOTPToBeSentEventHandlerName = "todo_email_validation_otp_to_be_sent_event_handler"

@@ -1,14 +1,14 @@
-module github.com/oexza/go-orisun-datastar
+module github.com/OrisunLabs/go-orisun-datastar
 
-go 1.26.4
+go 1.26.5
 
 require (
+	github.com/OrisunLabs/Orisun v0.6.1
 	github.com/a-h/templ v0.3.1020
 	github.com/delaneyj/toolbelt v0.9.1
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/google/uuid v1.6.0
 	github.com/nats-io/nats.go v1.52.0
-	github.com/oexza/Orisun v0.4.10
 	github.com/starfederation/datastar-go v1.2.2
 	golang.org/x/crypto v0.54.0
 	zombiezen.com/go/sqlite v1.4.2

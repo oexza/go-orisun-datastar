@@ -4,14 +4,14 @@ import (
 	"context"
 	"strings"
 
-	"github.com/oexza/go-orisun-datastar/internal/appdb"
-	"github.com/oexza/go-orisun-datastar/internal/auth"
-	"github.com/oexza/go-orisun-datastar/internal/dbsql"
-	"github.com/oexza/go-orisun-datastar/internal/views"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/appdb"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/auth"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/dbsql"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/views"
 	"zombiezen.com/go/sqlite"
 
-	"github.com/oexza/go-orisun-datastar/internal/eventstore"
-	"github.com/oexza/go-orisun-datastar/internal/protectedpii"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/eventstore"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/protectedpii"
 )
 
 const (

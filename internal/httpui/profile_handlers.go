@@ -9,12 +9,12 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/starfederation/datastar-go/datastar"
 
-	"github.com/oexza/go-orisun-datastar/internal/appdb"
-	"github.com/oexza/go-orisun-datastar/internal/auth"
-	"github.com/oexza/go-orisun-datastar/internal/eventstore"
-	"github.com/oexza/go-orisun-datastar/internal/features/profile"
-	"github.com/oexza/go-orisun-datastar/internal/views"
-	"github.com/oexza/go-orisun-datastar/internal/viewstore"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/appdb"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/auth"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/eventstore"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/features/profile"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/views"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/viewstore"
 )
 
 type profileViewState struct {

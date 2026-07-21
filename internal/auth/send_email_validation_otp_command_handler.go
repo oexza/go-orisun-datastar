@@ -5,12 +5,12 @@ import (
 	"errors"
 	"time"
 
-	"github.com/oexza/go-orisun-datastar/internal/commandlimits"
-	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/commandlimits"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/uuidv7"
 
-	"github.com/oexza/go-orisun-datastar/internal/email"
-	"github.com/oexza/go-orisun-datastar/internal/eventstore"
-	"github.com/oexza/go-orisun-datastar/internal/protectedpii"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/email"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/eventstore"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/protectedpii"
 )
 
 type CommandMetadata = eventstore.CommandMetadata

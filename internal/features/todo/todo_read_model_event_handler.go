@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/oexza/go-orisun-datastar/internal/eventstore"
-	"github.com/oexza/go-orisun-datastar/internal/views"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/eventstore"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/views"
 )
 
 const TodoReadModelEventHandlerName = "todo_read_model_event_handler"

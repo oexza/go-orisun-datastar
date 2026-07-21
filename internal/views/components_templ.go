@@ -10,7 +10,7 @@ import templruntime "github.com/a-h/templ/runtime"
 
 import (
 	"fmt"
-	"github.com/oexza/go-orisun-datastar/internal/resources"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/resources"
 )
 
 func Base(title string) templ.Component {

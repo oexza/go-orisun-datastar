@@ -5,8 +5,8 @@ import (
 	"errors"
 	"time"
 
+	appmigrations "github.com/OrisunLabs/go-orisun-datastar/migrations"
 	toolbeltdb "github.com/delaneyj/toolbelt/db"
-	appmigrations "github.com/oexza/go-orisun-datastar/migrations"
 )
 
 var ErrNoRows = errors.New("no rows in result set")

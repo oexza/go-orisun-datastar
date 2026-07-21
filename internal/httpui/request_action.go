@@ -3,7 +3,7 @@ package httpui
 import (
 	"net/http"
 
-	"github.com/oexza/go-orisun-datastar/internal/eventstore"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/eventstore"
 )
 
 func setRequestAction(r *http.Request, action string, fields map[string]any) {

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/oexza/go-orisun-datastar/internal/eventstore"
-	"github.com/oexza/go-orisun-datastar/internal/protectedpii"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/eventstore"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/protectedpii"
 )
 
 const AuthUserProjectionEventHandlerName = "auth_user_projection_event_handler"
