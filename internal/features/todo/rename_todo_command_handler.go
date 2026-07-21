@@ -88,9 +88,9 @@ func (m *renameTodoContext) handle(resolved eventstore.ResolvedEvent) {
 	case TodoCreated:
 		m.exists = true
 		m.deleted = false
-		m.title, _ = data["title"].(string)
+		m.title, _ = data[TodoTitleField].(string)
 	case TodoRenamed:
-		m.title, _ = data["title"].(string)
+		m.title, _ = data[TodoTitleField].(string)
 	case TodoDeleted:
 		m.deleted = true
 	}

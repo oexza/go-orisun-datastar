@@ -47,8 +47,8 @@ func (h *EmailValidationOTPToBeSentEventHandler) handle(ctx context.Context, res
 	if resolved.Event.EventType != EmailVerificationOTPGenerated {
 		return nil
 	}
-	otpID, _ := resolved.Event.Data["emailVerificationOTPGeneratedId"].(string)
-	userRegisteredID, _ := eventstore.Scope(resolved.Event.Data)["userRegisteredId"].(string)
+	otpID, _ := resolved.Event.Data[EmailVerificationOTPGeneratedIDField].(string)
+	userRegisteredID, _ := eventstore.Scope(resolved.Event.Data)[ScopeUserRegisteredIDKey].(string)
 	return SendEmailValidationOTPCommandHandler(ctx, SendEmailValidationOTPCommand{
 		UserRegisteredID:                userRegisteredID,
 		EmailVerificationOTPGeneratedID: otpID,

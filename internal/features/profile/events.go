@@ -22,7 +22,8 @@ const (
 	ProfileHeaderImageUploadedIDField = "profileHeaderImageUploadedId"
 	ProfileImageURLField              = "imageUrl"
 	ProfileImageUploadedAtField       = "uploadedAt"
-	ProfileScopeUserRegisteredIDField = "scope.userRegisteredId"
+	ProfileScopeUserRegisteredIDKey   = "userRegisteredId"
+	ProfileScopeUserRegisteredIDField = "scope." + ProfileScopeUserRegisteredIDKey
 )
 
 type ProfileBioUpdatedEvent struct {

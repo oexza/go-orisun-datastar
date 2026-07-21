@@ -27,8 +27,10 @@ const (
 	TodoReopenedAtField            = "reopenedAt"
 	TodoDeletedIDField             = "todoDeletedId"
 	TodoDeletedAtField             = "deletedAt"
-	TodoScopeIDField               = "scope.todoId"
-	TodoScopeUserRegisteredIDField = "scope.userRegisteredId"
+	TodoScopeIDKey                 = TodoIDField
+	TodoScopeUserRegisteredIDKey   = TodoUserRegisteredIDField
+	TodoScopeIDField               = "scope." + TodoScopeIDKey
+	TodoScopeUserRegisteredIDField = "scope." + TodoScopeUserRegisteredIDKey
 )
 
 type TodoCreatedEvent struct {

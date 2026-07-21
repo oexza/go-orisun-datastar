@@ -97,7 +97,7 @@ func newFakeTodoStore(userRegisteredID string, events ...eventstore.DomainEvent)
 func (s *fakeTodoStore) SaveEvents(_ context.Context, events []eventstore.DomainEvent, _ eventstore.Position, _ []eventstore.ResolvedEvent, _ eventstore.Query) (eventstore.WriteResult, error) {
 	for _, event := range events {
 		scope := eventstore.Scope(event.Data)
-		userRegisteredID, _ := scope["userRegisteredId"].(string)
+		userRegisteredID, _ := scope[TodoScopeUserRegisteredIDKey].(string)
 		s.appendResolved(userRegisteredID, event)
 		s.saved = append(s.saved, event)
 	}
@@ -143,12 +143,12 @@ func (s *fakeTodoStore) GetLatestByCriteria(_ context.Context, criteria []events
 
 func (s *fakeTodoStore) appendResolved(fallbackUserRegisteredID string, event eventstore.DomainEvent) {
 	scope := eventstore.Scope(event.Data)
-	todoID, _ := scope["todoId"].(string)
+	todoID, _ := scope[TodoScopeIDKey].(string)
 	if todoID == "" {
-		todoID, _ = event.Data["todoId"].(string)
+		todoID, _ = event.Data[TodoIDField].(string)
 	}
-	if scope["userRegisteredId"] == nil && fallbackUserRegisteredID != "" {
-		scope["userRegisteredId"] = fallbackUserRegisteredID
+	if scope[TodoScopeUserRegisteredIDKey] == nil && fallbackUserRegisteredID != "" {
+		scope[TodoScopeUserRegisteredIDKey] = fallbackUserRegisteredID
 		event.Data["scope"] = scope
 	}
 	s.position++

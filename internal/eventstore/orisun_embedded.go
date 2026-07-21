@@ -125,7 +125,6 @@ func (s *EmbeddedOrisun) SaveEvents(ctx context.Context, events []DomainEvent, e
 	for _, event := range events {
 		event = withScopeEventIDs(event, scopeEvents)
 		data := flattenMap(event.Data)
-		data["eventType"] = event.EventType
 		toSave = append(toSave, orisunapi.EventWithMapTags{
 			EventId:   event.EventID,
 			EventType: event.EventType,

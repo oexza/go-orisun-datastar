@@ -48,27 +48,27 @@ func (h *ReadModelEventHandler) handle(ctx context.Context, resolved eventstore.
 	var userRegisteredID string
 	switch resolved.Event.EventType {
 	case userRegistered:
-		userRegisteredID, _ = resolved.Event.Data["userRegisteredId"].(string)
+		userRegisteredID, _ = resolved.Event.Data[auth.UserRegisteredIDField].(string)
 		if err := h.readModel.UpsertRegisteredUser(ctx, resolved, h.keys); err != nil {
 			return err
 		}
 	case userNameChanged:
-		userRegisteredID, _ = eventstore.Scope(resolved.Event.Data)["userRegisteredId"].(string)
+		userRegisteredID, _ = eventstore.Scope(resolved.Event.Data)[auth.ScopeUserRegisteredIDKey].(string)
 		if err := h.readModel.UpdateName(ctx, resolved, h.keys); err != nil {
 			return err
 		}
 	case ProfileBioUpdated:
-		userRegisteredID, _ = eventstore.Scope(resolved.Event.Data)["userRegisteredId"].(string)
+		userRegisteredID, _ = eventstore.Scope(resolved.Event.Data)[ProfileScopeUserRegisteredIDKey].(string)
 		if err := h.readModel.UpdateBio(ctx, resolved, h.keys); err != nil {
 			return err
 		}
 	case ProfileImageUploaded:
-		userRegisteredID, _ = eventstore.Scope(resolved.Event.Data)["userRegisteredId"].(string)
+		userRegisteredID, _ = eventstore.Scope(resolved.Event.Data)[ProfileScopeUserRegisteredIDKey].(string)
 		if err := h.readModel.UpdateImage(ctx, resolved); err != nil {
 			return err
 		}
 	case ProfileHeaderImageUploaded:
-		userRegisteredID, _ = eventstore.Scope(resolved.Event.Data)["userRegisteredId"].(string)
+		userRegisteredID, _ = eventstore.Scope(resolved.Event.Data)[ProfileScopeUserRegisteredIDKey].(string)
 		if err := h.readModel.UpdateHeaderImage(ctx, resolved); err != nil {
 			return err
 		}

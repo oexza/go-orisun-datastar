@@ -90,9 +90,9 @@ func SendEmailValidationOTPCommandHandler(ctx context.Context, command SendEmail
 func (m *emailValidationOTPContext) handle(resolved eventstore.ResolvedEvent) {
 	switch resolved.Event.EventType {
 	case EmailVerificationOTPGenerated:
-		m.otpID, _ = resolved.Event.Data["emailVerificationOTPGeneratedId"].(string)
-		m.code, _ = resolved.Event.Data["otpCode"].(string)
-		m.expiresAt, _ = resolved.Event.Data["expiresAt"].(string)
+		m.otpID, _ = resolved.Event.Data[EmailVerificationOTPGeneratedIDField].(string)
+		m.code, _ = resolved.Event.Data[EmailVerificationOTPCodeField].(string)
+		m.expiresAt, _ = resolved.Event.Data[EmailVerificationOTPExpiresAtField].(string)
 	case UserRegistered:
 		m.email = protectedpii.MustDecryptEventStringWithDataKey(protectedpii.FromEnv(), m.subjectKey, resolved.Event.Data, UserRegisteredEmailField)
 	case EmailVerificationOTPSent:
