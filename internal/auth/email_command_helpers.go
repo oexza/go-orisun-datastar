@@ -1,6 +1,6 @@
 package auth
 
-import "github.com/oexza/go-orisun-datastar/internal/eventstore"
+import "github.com/OrisunLabs/go-orisun-datastar/internal/eventstore"
 
 func userRegisteredQuery(userRegisteredID string) eventstore.Query {
 	return eventstore.Query{Criteria: []eventstore.Criterion{{Tags: []eventstore.Tag{

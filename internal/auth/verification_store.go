@@ -9,8 +9,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/oexza/go-orisun-datastar/internal/dbsql"
-	"github.com/oexza/go-orisun-datastar/internal/protectedpii"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/dbsql"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/protectedpii"
 )
 
 type VerificationStore struct {

@@ -3,8 +3,8 @@ package profile
 import (
 	"time"
 
-	"github.com/oexza/go-orisun-datastar/internal/eventstore"
-	"github.com/oexza/go-orisun-datastar/internal/protectedpii"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/eventstore"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/protectedpii"
 )
 
 const (
@@ -22,7 +22,8 @@ const (
 	ProfileHeaderImageUploadedIDField = "profileHeaderImageUploadedId"
 	ProfileImageURLField              = "imageUrl"
 	ProfileImageUploadedAtField       = "uploadedAt"
-	ProfileScopeUserRegisteredIDField = "scope.userRegisteredId"
+	ProfileScopeUserRegisteredIDKey   = "userRegisteredId"
+	ProfileScopeUserRegisteredIDField = "scope." + ProfileScopeUserRegisteredIDKey
 )
 
 type ProfileBioUpdatedEvent struct {

@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/OrisunLabs/go-orisun-datastar/internal/eventstore"
 	"github.com/nats-io/nats.go"
-	"github.com/oexza/go-orisun-datastar/internal/eventstore"
 )
 
 type Bus struct {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	orisunapi "github.com/oexza/Orisun/orisun"
+	orisunapi "github.com/OrisunLabs/Orisun/orisun"
 )
 
 type BoundaryIndexDefinition struct {

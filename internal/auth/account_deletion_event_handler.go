@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/oexza/go-orisun-datastar/internal/eventstore"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/eventstore"
 )
 
 const AccountDeletionEventHandlerName = "account_deletion_event_handler"
@@ -48,8 +48,8 @@ func (h *AccountDeletionEventHandler) handle(ctx context.Context, resolved event
 		return nil
 	}
 	requestID, _ := resolved.Event.Data[AccountDeletionRequestedIDField].(string)
-	authUserID, _ := resolved.Event.Data["authUserId"].(string)
-	userRegisteredID, _ := eventstore.Scope(resolved.Event.Data)["userRegisteredId"].(string)
+	authUserID, _ := resolved.Event.Data[AccountDeletionAuthUserIDField].(string)
+	userRegisteredID, _ := eventstore.Scope(resolved.Event.Data)[ScopeUserRegisteredIDKey].(string)
 	return CompleteAccountDeletionCommandHandler(ctx, CompleteAccountDeletionCommand{
 		AccountDeletionRequestedID: requestID,
 		UserRegisteredID:           userRegisteredID,

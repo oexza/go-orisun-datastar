@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/oexza/go-orisun-datastar/internal/eventstore"
-	"github.com/oexza/go-orisun-datastar/internal/protectedpii"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/eventstore"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/protectedpii"
 )
 
 const AuthUserProjectionEventHandlerName = "auth_user_projection_event_handler"
@@ -107,7 +107,7 @@ func (h *AuthUserProjectionEventHandler) handleUserRegistered(ctx context.Contex
 }
 
 func (h *AuthUserProjectionEventHandler) handleUserNameChanged(ctx context.Context, resolved eventstore.ResolvedEvent) error {
-	userRegisteredID := stringValue(eventstore.Scope(resolved.Event.Data)["userRegisteredId"])
+	userRegisteredID := stringValue(eventstore.Scope(resolved.Event.Data)[ScopeUserRegisteredIDKey])
 	subjectKey, ok, err := h.keys.GetSubjectDataKey(ctx, userRegisteredID)
 	if err != nil {
 		return err
@@ -123,7 +123,7 @@ func (h *AuthUserProjectionEventHandler) handleUserNameChanged(ctx context.Conte
 }
 
 func (h *AuthUserProjectionEventHandler) handleEmailVerificationOTPGenerated(ctx context.Context, resolved eventstore.ResolvedEvent) error {
-	userRegisteredID := stringValue(eventstore.Scope(resolved.Event.Data)["userRegisteredId"])
+	userRegisteredID := stringValue(eventstore.Scope(resolved.Event.Data)[ScopeUserRegisteredIDKey])
 	otpID := stringValue(resolved.Event.Data[EmailVerificationOTPGeneratedIDField])
 	code := stringValue(resolved.Event.Data[EmailVerificationOTPCodeField])
 	expiresAt, err := time.Parse(time.RFC3339, stringValue(resolved.Event.Data[EmailVerificationOTPExpiresAtField]))
@@ -134,9 +134,9 @@ func (h *AuthUserProjectionEventHandler) handleEmailVerificationOTPGenerated(ctx
 }
 
 func (h *AuthUserProjectionEventHandler) handleEmailVerificationOTPValidated(ctx context.Context, resolved eventstore.ResolvedEvent) error {
-	userRegisteredID, _ := eventstore.Scope(resolved.Event.Data)["userRegisteredId"].(string)
+	userRegisteredID, _ := eventstore.Scope(resolved.Event.Data)[ScopeUserRegisteredIDKey].(string)
 	if userRegisteredID == "" {
-		otpID, _ := eventstore.Scope(resolved.Event.Data)["emailVerificationOTPGeneratedId"].(string)
+		otpID, _ := eventstore.Scope(resolved.Event.Data)[ScopeEmailVerificationOTPGeneratedIDKey].(string)
 		generatedEvents, err := h.retriever.GetEvents(ctx, eventstore.NoEventPosition, 1, eventstore.Forward, emailVerificationOTPGeneratedQuery(otpID))
 		if err != nil {
 			return err
@@ -144,7 +144,7 @@ func (h *AuthUserProjectionEventHandler) handleEmailVerificationOTPValidated(ctx
 		if len(generatedEvents) == 0 {
 			return nil
 		}
-		userRegisteredID, _ = eventstore.Scope(generatedEvents[0].Event.Data)["userRegisteredId"].(string)
+		userRegisteredID, _ = eventstore.Scope(generatedEvents[0].Event.Data)[ScopeUserRegisteredIDKey].(string)
 	}
 	if userRegisteredID == "" {
 		return nil
@@ -153,7 +153,7 @@ func (h *AuthUserProjectionEventHandler) handleEmailVerificationOTPValidated(ctx
 }
 
 func (h *AuthUserProjectionEventHandler) handlePasswordResetRequested(ctx context.Context, resolved eventstore.ResolvedEvent) error {
-	userRegisteredID := stringValue(eventstore.Scope(resolved.Event.Data)["userRegisteredId"])
+	userRegisteredID := stringValue(eventstore.Scope(resolved.Event.Data)[ScopeUserRegisteredIDKey])
 	requestID := stringValue(resolved.Event.Data[PasswordResetRequestedIDField])
 	token := stringValue(resolved.Event.Data[PasswordResetRequestedTokenField])
 	expiresAt, err := time.Parse(time.RFC3339, stringValue(resolved.Event.Data[PasswordResetRequestedExpiresAtField]))
@@ -164,7 +164,7 @@ func (h *AuthUserProjectionEventHandler) handlePasswordResetRequested(ctx contex
 }
 
 func (h *AuthUserProjectionEventHandler) handlePasswordUpdated(ctx context.Context, resolved eventstore.ResolvedEvent) error {
-	userRegisteredID := stringValue(eventstore.Scope(resolved.Event.Data)["userRegisteredId"])
+	userRegisteredID := stringValue(eventstore.Scope(resolved.Event.Data)[ScopeUserRegisteredIDKey])
 	passwordHash := stringValue(resolved.Event.Data[PasswordChangedPasswordHashField])
 	if resolved.Event.EventType == PasswordResetCompleted {
 		passwordHash = stringValue(resolved.Event.Data[PasswordResetCompletedPasswordHashField])

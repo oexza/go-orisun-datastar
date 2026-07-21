@@ -4,7 +4,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/oexza/go-orisun-datastar/internal/eventstore"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/eventstore"
 )
 
 type CommandMetadata = eventstore.CommandMetadata

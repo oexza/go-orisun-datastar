@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/oexza/go-orisun-datastar/internal/eventstore"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/eventstore"
 )
 
 const ProfileImageUploadedAuthUserEventHandlerName = "profile_image_uploaded_better_auth_event_handler"
@@ -49,8 +49,8 @@ func (h *ProfileImageUploadedAuthUserEventHandler) handle(ctx context.Context, r
 	if resolved.Event.EventType != ProfileImageUploaded {
 		return nil
 	}
-	userRegisteredID, _ := eventstore.Scope(resolved.Event.Data)["userRegisteredId"].(string)
-	imageURL, _ := resolved.Event.Data["imageUrl"].(string)
+	userRegisteredID, _ := eventstore.Scope(resolved.Event.Data)[ProfileScopeUserRegisteredIDKey].(string)
+	imageURL, _ := resolved.Event.Data[ProfileImageURLField].(string)
 	if userRegisteredID == "" || imageURL == "" {
 		return nil
 	}

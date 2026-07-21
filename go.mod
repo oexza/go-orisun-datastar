@@ -1,14 +1,14 @@
-module github.com/oexza/go-orisun-datastar
+module github.com/OrisunLabs/go-orisun-datastar
 
-go 1.26.4
+go 1.26.5
 
 require (
-	github.com/a-h/templ v0.3.960
+	github.com/OrisunLabs/Orisun v0.7.0
+	github.com/a-h/templ v0.3.1020
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/nats-io/nats.go v1.52.0
-	github.com/oexza/Orisun v0.4.10
 	github.com/starfederation/datastar-go v1.2.2
 	golang.org/x/crypto v0.54.0
 )
@@ -51,7 +51,7 @@ require (
 	github.com/klauspost/compress v1.19.0 // indirect
 	github.com/lib/pq v1.12.3 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
-	github.com/mattn/go-isatty v0.0.22 // indirect
+	github.com/mattn/go-isatty v0.0.23 // indirect
 	github.com/minio/highwayhash v1.0.4 // indirect
 	github.com/natefinch/atomic v1.0.1 // indirect
 	github.com/nats-io/jwt/v2 v2.8.2 // indirect
@@ -94,9 +94,9 @@ require (
 	golang.org/x/text v0.40.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/tools v0.48.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20260706201446-f0a921348800 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260706201446-f0a921348800 // indirect
-	google.golang.org/grpc v1.82.0 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20260715232425-e75dac1f907d // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260715232425-e75dac1f907d // indirect
+	google.golang.org/grpc v1.82.1 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

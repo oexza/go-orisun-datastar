@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/oexza/go-orisun-datastar/internal/eventstore"
-	"github.com/oexza/go-orisun-datastar/internal/views"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/eventstore"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/views"
 )
 
 const TodoReadModelEventHandlerName = "todo_read_model_event_handler"
@@ -100,28 +100,28 @@ func TodoReadModelEventHandlerQuery() eventstore.Query {
 func (h *TodoReadModelEventHandler) handle(ctx context.Context, resolved eventstore.ResolvedEvent) error {
 	data := resolved.Event.Data
 	scope := eventstore.Scope(data)
-	todoID, _ := scope["todoId"].(string)
-	userRegisteredID, _ := scope["userRegisteredId"].(string)
+	todoID, _ := scope[TodoScopeIDKey].(string)
+	userRegisteredID, _ := scope[TodoScopeUserRegisteredIDKey].(string)
 
 	switch resolved.Event.EventType {
 	case TodoCreated:
-		title, _ := data["title"].(string)
+		title, _ := data[TodoTitleField].(string)
 		if err := h.readModel.InsertCreatedTodo(ctx, TodoCreatedProjection{
 			Position:         resolved.Position,
 			TodoID:           todoID,
 			UserRegisteredID: userRegisteredID,
 			Title:            title,
-			CreatedAt:        parseTime(data["createdAt"]),
+			CreatedAt:        parseTime(data[TodoCreatedAtField]),
 		}); err != nil {
 			return err
 		}
 	case TodoRenamed:
-		title, _ := data["title"].(string)
+		title, _ := data[TodoTitleField].(string)
 		if err := h.readModel.RenameTodo(ctx, TodoRenamedProjection{
 			Position:  resolved.Position,
 			TodoID:    todoID,
 			Title:     title,
-			RenamedAt: parseTime(data["renamedAt"]),
+			RenamedAt: parseTime(data[TodoRenamedAtField]),
 		}); err != nil {
 			return err
 		}
@@ -129,7 +129,7 @@ func (h *TodoReadModelEventHandler) handle(ctx context.Context, resolved eventst
 		if err := h.readModel.CompleteTodo(ctx, TodoCompletedProjection{
 			Position:    resolved.Position,
 			TodoID:      todoID,
-			CompletedAt: parseTime(data["completedAt"]),
+			CompletedAt: parseTime(data[TodoCompletedAtField]),
 		}); err != nil {
 			return err
 		}
@@ -137,7 +137,7 @@ func (h *TodoReadModelEventHandler) handle(ctx context.Context, resolved eventst
 		if err := h.readModel.ReopenTodo(ctx, TodoReopenedProjection{
 			Position:   resolved.Position,
 			TodoID:     todoID,
-			ReopenedAt: parseTime(data["reopenedAt"]),
+			ReopenedAt: parseTime(data[TodoReopenedAtField]),
 		}); err != nil {
 			return err
 		}
@@ -145,7 +145,7 @@ func (h *TodoReadModelEventHandler) handle(ctx context.Context, resolved eventst
 		if err := h.readModel.DeleteTodo(ctx, TodoDeletedProjection{
 			Position:  resolved.Position,
 			TodoID:    todoID,
-			DeletedAt: parseTime(data["deletedAt"]),
+			DeletedAt: parseTime(data[TodoDeletedAtField]),
 		}); err != nil {
 			return err
 		}

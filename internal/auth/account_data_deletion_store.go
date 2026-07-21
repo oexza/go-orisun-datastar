@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 
+	"github.com/OrisunLabs/go-orisun-datastar/internal/dbsql"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/oexza/go-orisun-datastar/internal/dbsql"
 )
 
 type AccountDeletionStorage interface {

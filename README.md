@@ -1,6 +1,6 @@
 # Go-Orisun-Datastar
 
-Go-Orisun-Datastar is a Go starter for event-sourced, server-rendered web applications. It combines [Orisun](https://github.com/oexza/Orisun), chi, templ, Datastar, sqlc, Tailwind, and DaisyUI into a small application that is useful as a reference and as a starting point.
+Go-Orisun-Datastar is a Go starter for event-sourced, server-rendered web applications. It combines [Orisun](https://github.com/OrisunLabs/Orisun), chi, templ, Datastar, sqlc, Tailwind, and DaisyUI into a small application that is useful as a reference and as a starting point.
 
 The `postgres` branch uses PostgreSQL for auth/session tables and read models, embedded Orisun stores immutable domain events in Postgres, and the app borrows Orisun's embedded NATS/JetStream connection for event notifications and view-state updates. Email messages are logged, uploads are written to `static/uploads`, and no external email, object storage, or NATS service is required.
 
@@ -20,7 +20,7 @@ If a branch is already checked out in a separate worktree, use that worktree pat
 - Datastar SSE for form submissions, redirects, indicators, fragment patches, sparse signals, and long-running streams
 - Datastar SDK SSE compression with `datastar.WithCompression()`
 - HTTP response compression for normal HTML, CSS, JavaScript, JSON, text, and SVG responses
-- [Orisun](https://github.com/oexza/Orisun) event sourcing with typed domain events
+- [Orisun](https://github.com/OrisunLabs/Orisun) event sourcing with typed domain events
 - Embedded Orisun NATS/JetStream reused directly by the app; no NATS URL is needed
 - CQRS-style read models and replayable event-handler slices
 - Command-handler slices for business writes

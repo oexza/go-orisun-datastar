@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/oexza/go-orisun-datastar/internal/eventstore"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/eventstore"
 )
 
 const EmailValidationOTPToBeSentEventHandlerName = "todo_email_validation_otp_to_be_sent_event_handler"
@@ -47,8 +47,8 @@ func (h *EmailValidationOTPToBeSentEventHandler) handle(ctx context.Context, res
 	if resolved.Event.EventType != EmailVerificationOTPGenerated {
 		return nil
 	}
-	otpID, _ := resolved.Event.Data["emailVerificationOTPGeneratedId"].(string)
-	userRegisteredID, _ := eventstore.Scope(resolved.Event.Data)["userRegisteredId"].(string)
+	otpID, _ := resolved.Event.Data[EmailVerificationOTPGeneratedIDField].(string)
+	userRegisteredID, _ := eventstore.Scope(resolved.Event.Data)[ScopeUserRegisteredIDKey].(string)
 	return SendEmailValidationOTPCommandHandler(ctx, SendEmailValidationOTPCommand{
 		UserRegisteredID:                userRegisteredID,
 		EmailVerificationOTPGeneratedID: otpID,

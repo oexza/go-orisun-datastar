@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/OrisunLabs/Orisun/config"
+	orisunlog "github.com/OrisunLabs/Orisun/logging"
+	natsruntime "github.com/OrisunLabs/Orisun/nats"
+	orisunapi "github.com/OrisunLabs/Orisun/orisun"
+	postgresbackend "github.com/OrisunLabs/Orisun/postgres"
 	natsgo "github.com/nats-io/nats.go"
-	"github.com/oexza/Orisun/config"
-	orisunlog "github.com/oexza/Orisun/logging"
-	natsruntime "github.com/oexza/Orisun/nats"
-	orisunapi "github.com/oexza/Orisun/orisun"
-	postgresbackend "github.com/oexza/Orisun/postgres"
 )
 
 type EmbeddedOrisun struct {
@@ -150,7 +150,6 @@ func (s *EmbeddedOrisun) SaveEvents(ctx context.Context, events []DomainEvent, e
 	for _, event := range events {
 		event = withScopeEventIDs(event, scopeEvents)
 		data := flattenMap(event.Data)
-		data["eventType"] = event.EventType
 		toSave = append(toSave, orisunapi.EventWithMapTags{
 			EventId:   event.EventID,
 			EventType: event.EventType,
@@ -215,9 +214,9 @@ func (s *EmbeddedOrisun) GetEvents(ctx context.Context, from Position, count int
 	if err != nil {
 		return nil, err
 	}
-	resolved := make([]ResolvedEvent, 0, len(resp.Events))
-	for _, event := range resp.Events {
-		mapped, err := fromOrisunEvent(event)
+	resolved := make([]ResolvedEvent, 0, len(resp))
+	for _, event := range resp {
+		mapped, err := fromOrisunReadEvent(event)
 		if err != nil {
 			return nil, err
 		}
@@ -227,21 +226,24 @@ func (s *EmbeddedOrisun) GetEvents(ctx context.Context, from Position, count int
 }
 
 func (s *EmbeddedOrisun) GetLatestByCriteria(ctx context.Context, criteria []Criterion) (LatestByCriteriaResult, error) {
-	resp, err := s.retriever.GetLatestByCriteria(ctx, &orisunapi.GetLatestByCriteriaRequest{
+	batch, err := s.retriever.GetLatestByCriteria(ctx, orisunapi.LatestByCriteriaQuery{
 		Boundary: s.boundary,
-		Criteria: toOrisunCriteria(criteria),
+		Criteria: toOrisunReadCriteria(criteria),
 	})
 	if err != nil {
 		return LatestByCriteriaResult{}, err
 	}
 	result := LatestByCriteriaResult{
-		Results:         make([]LatestCriterionResult, 0, len(resp.Results)),
-		ContextPosition: fromOrisunPosition(resp.ContextPosition),
+		Results: make([]LatestCriterionResult, 0, len(batch.Matches)),
+		ContextPosition: Position{
+			Commit:  batch.ContextCommitPosition,
+			Prepare: batch.ContextPreparePosition,
+		},
 	}
-	for _, latest := range resp.Results {
-		mapped := LatestCriterionResult{Criterion: fromOrisunCriterion(latest.Criterion)}
-		if latest.Event != nil {
-			event, err := fromOrisunEvent(latest.Event)
+	for i, latest := range batch.Matches {
+		mapped := LatestCriterionResult{Criterion: criteria[i]}
+		if latest.Found {
+			event, err := fromOrisunReadEvent(latest.Event)
 			if err != nil {
 				return LatestByCriteriaResult{}, err
 			}
@@ -303,7 +305,7 @@ func (s *EmbeddedOrisun) SubscribeToEvents(ctx context.Context, subscriberName s
 	}
 }
 
-func fromOrisunEvent(event *orisunapi.Event) (ResolvedEvent, error) {
+func fromOrisunReadEvent(event orisunapi.ReadEvent) (ResolvedEvent, error) {
 	data := map[string]any{}
 	if event.Data != "" {
 		if err := json.Unmarshal([]byte(event.Data), &data); err != nil {
@@ -315,7 +317,7 @@ func fromOrisunEvent(event *orisunapi.Event) (ResolvedEvent, error) {
 		_ = json.Unmarshal([]byte(event.Metadata), &metadata)
 	}
 	return ResolvedEvent{
-		Position: fromOrisunPosition(event.Position),
+		Position: Position{Commit: event.CommitPosition, Prepare: event.PreparePosition},
 		Event: DomainEvent{
 			EventID:   event.EventId,
 			EventType: event.EventType,
@@ -355,15 +357,16 @@ func toOrisunCriteria(input []Criterion) []*orisunapi.Criterion {
 	return criteria
 }
 
-func fromOrisunCriterion(input *orisunapi.Criterion) Criterion {
-	if input == nil {
-		return Criterion{}
+func toOrisunReadCriteria(input []Criterion) []orisunapi.ReadCriterion {
+	criteria := make([]orisunapi.ReadCriterion, 0, len(input))
+	for _, criterion := range input {
+		tags := make([]orisunapi.ReadTag, 0, len(criterion.Tags))
+		for _, tag := range criterion.Tags {
+			tags = append(tags, orisunapi.ReadTag{Key: tag.Key, Value: tag.Value})
+		}
+		criteria = append(criteria, orisunapi.ReadCriterion{Tags: tags})
 	}
-	criterion := Criterion{Tags: make([]Tag, 0, len(input.Tags))}
-	for _, tag := range input.Tags {
-		criterion.Tags = append(criterion.Tags, Tag{Key: tag.Key, Value: tag.Value})
-	}
-	return criterion
+	return criteria
 }
 
 func flattenMap(input map[string]any) map[string]any {

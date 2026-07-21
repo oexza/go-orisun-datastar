@@ -3,8 +3,8 @@ package auth
 import (
 	"time"
 
-	"github.com/oexza/go-orisun-datastar/internal/eventstore"
-	"github.com/oexza/go-orisun-datastar/internal/protectedpii"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/eventstore"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/protectedpii"
 )
 
 const (
@@ -54,12 +54,16 @@ const (
 	PasswordChangedIDField                    = "passwordChangedId"
 	PasswordChangedAtField                    = "changedAt"
 	PasswordChangedPasswordHashField          = "passwordHash"
-	ScopeUserRegisteredIDField                = "scope.userRegisteredId"
-	ScopeEmailVerificationOTPGeneratedIDField = "scope.emailVerificationOTPGeneratedId"
-	ScopePasswordResetRequestedIDField        = "scope.passwordResetRequestedId"
+	ScopeUserRegisteredIDKey                  = UserRegisteredIDField
+	ScopeEmailVerificationOTPGeneratedIDKey   = EmailVerificationOTPGeneratedIDField
+	ScopePasswordResetRequestedIDKey          = PasswordResetRequestedIDField
+	ScopeUserRegisteredIDField                = "scope." + ScopeUserRegisteredIDKey
+	ScopeEmailVerificationOTPGeneratedIDField = "scope." + ScopeEmailVerificationOTPGeneratedIDKey
+	ScopePasswordResetRequestedIDField        = "scope." + ScopePasswordResetRequestedIDKey
 	AccountDeletionRequested                  = "AccountDeletionRequested"
 	AccountDeleted                            = "AccountDeleted"
 	AccountDeletionRequestedIDField           = "accountDeletionRequestedId"
+	AccountDeletionAuthUserIDField            = "authUserId"
 	AccountDeletedIDField                     = "accountDeletedId"
 	AccountDeletionRequestedAtField           = "requestedAt"
 	AccountDeletedAtField                     = "deletedAt"

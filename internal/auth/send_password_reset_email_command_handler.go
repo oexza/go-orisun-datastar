@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/oexza/go-orisun-datastar/internal/commandlimits"
-	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/commandlimits"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/uuidv7"
 
-	"github.com/oexza/go-orisun-datastar/internal/email"
-	"github.com/oexza/go-orisun-datastar/internal/eventstore"
-	"github.com/oexza/go-orisun-datastar/internal/protectedpii"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/email"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/eventstore"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/protectedpii"
 )
 
 type SendPasswordResetEmailCommand struct {
@@ -51,7 +51,7 @@ func SendPasswordResetEmailCommandHandler(ctx context.Context, command SendPassw
 	}
 	for _, resolved := range model.events {
 		if resolved.Event.EventType == PasswordResetRequested {
-			userRegisteredID, _ := eventstore.Scope(resolved.Event.Data)["userRegisteredId"].(string)
+			userRegisteredID, _ := eventstore.Scope(resolved.Event.Data)[ScopeUserRegisteredIDKey].(string)
 			subjectKey, ok, err := keys.GetSubjectDataKey(ctx, userRegisteredID)
 			if err != nil {
 				return err
@@ -91,11 +91,11 @@ func SendPasswordResetEmailCommandHandler(ctx context.Context, command SendPassw
 func (m *passwordResetEmailContext) handle(resolved eventstore.ResolvedEvent) {
 	switch resolved.Event.EventType {
 	case PasswordResetRequested:
-		m.requestID, _ = resolved.Event.Data["passwordResetRequestedId"].(string)
+		m.requestID, _ = resolved.Event.Data[PasswordResetRequestedIDField].(string)
 		protector := protectedpii.FromEnv()
 		m.email = protectedpii.MustDecryptEventStringWithDataKey(protector, m.subjectKey, resolved.Event.Data, PasswordResetRequestedEmailField)
 		m.token = protectedpii.MustDecryptEventStringWithDataKey(protector, m.subjectKey, resolved.Event.Data, PasswordResetRequestedTokenField)
-		m.expiresAt, _ = resolved.Event.Data["expiresAt"].(string)
+		m.expiresAt, _ = resolved.Event.Data[PasswordResetRequestedExpiresAtField].(string)
 	case PasswordResetEmailSent:
 		m.alreadySent = true
 	}

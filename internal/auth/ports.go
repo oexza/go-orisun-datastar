@@ -3,7 +3,7 @@ package auth
 import (
 	"context"
 
-	"github.com/oexza/go-orisun-datastar/internal/email"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/email"
 )
 
 type EmailSender interface {

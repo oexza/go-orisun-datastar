@@ -4,10 +4,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/oexza/go-orisun-datastar/internal/commandlimits"
-	"github.com/oexza/go-orisun-datastar/internal/uuidv7"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/commandlimits"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/uuidv7"
 
-	"github.com/oexza/go-orisun-datastar/internal/eventstore"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/eventstore"
 )
 
 type RenameTodoCommand struct {
@@ -88,9 +88,9 @@ func (m *renameTodoContext) handle(resolved eventstore.ResolvedEvent) {
 	case TodoCreated:
 		m.exists = true
 		m.deleted = false
-		m.title, _ = data["title"].(string)
+		m.title, _ = data[TodoTitleField].(string)
 	case TodoRenamed:
-		m.title, _ = data["title"].(string)
+		m.title, _ = data[TodoTitleField].(string)
 	case TodoDeleted:
 		m.deleted = true
 	}

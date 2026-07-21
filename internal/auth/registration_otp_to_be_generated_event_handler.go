@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/oexza/go-orisun-datastar/internal/eventstore"
-	"github.com/oexza/go-orisun-datastar/internal/views"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/eventstore"
+	"github.com/OrisunLabs/go-orisun-datastar/internal/views"
 )
 
 const RegistrationOTPToBeGeneratedEventHandlerName = "todo_registration_otp_to_be_generated_event_handler"
@@ -47,11 +47,11 @@ func (h *RegistrationOTPToBeGeneratedEventHandler) handle(ctx context.Context, r
 	if resolved.Event.EventType != UserRegistered {
 		return nil
 	}
-	userRegisteredID, _ := resolved.Event.Data["userRegisteredId"].(string)
-	emailAddress, _ := resolved.Event.Data["email"].(string)
-	firstName, _ := resolved.Event.Data["firstName"].(string)
-	lastName, _ := resolved.Event.Data["lastName"].(string)
-	username, _ := resolved.Event.Data["username"].(string)
+	userRegisteredID, _ := resolved.Event.Data[UserRegisteredIDField].(string)
+	emailAddress, _ := resolved.Event.Data[UserRegisteredEmailField].(string)
+	firstName, _ := resolved.Event.Data[UserRegisteredFirstNameField].(string)
+	lastName, _ := resolved.Event.Data[UserRegisteredLastNameField].(string)
+	username, _ := resolved.Event.Data[UserRegisteredUsernameField].(string)
 
 	user := views.User{
 		UserRegisteredID: userRegisteredID,
